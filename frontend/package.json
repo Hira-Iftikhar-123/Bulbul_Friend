@@ -10,9 +10,10 @@
     "react-router-dom": "^6.3.0"
   },
   "scripts": {
-    "start": "npx serve -s build -l 3000",
+    "start": "npm run build && npx serve -s build -l 3000",
+    "dev": "npx webpack serve --mode development",
     "build": "npx webpack --mode development",
-    "dev": "npx webpack serve --mode development"
+    "build-prod": "npx webpack --mode production"
   },
   "devDependencies": {
     "@babel/core": "^7.22.0",
