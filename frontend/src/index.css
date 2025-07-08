@@ -20,6 +20,15 @@ body {
   text-align: right;
   font-size: 1.15rem;
 }
+@keyframes waveAnim {
+  0%, 100% {
+    height: 12px;
+  }
+  50% {
+    height: 32px;
+  }
+}
+
 
 .rtl {
   direction: rtl;
