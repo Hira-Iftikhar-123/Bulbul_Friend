@@ -24,7 +24,14 @@ const Chat = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div style={{
+      minHeight: '100vh',
+      background: 'url(/Wallpaper_Bulbul.jpeg) no-repeat center center fixed',
+      backgroundSize: 'cover',
+      fontFamily: 'serif',
+      position: 'relative'
+    }}>
+      <div className="max-w-4xl mx-auto p-4"> 
       <div className="card">
         <h1 className="text-2xl font-bold mb-4">Chat with Bulbul</h1>
         
@@ -71,6 +78,7 @@ const Chat = () => {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };
