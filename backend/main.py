@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from GeminiLLM import query_gemini
 from pydantic import BaseModel
+from models import ChatRequest, ChatResponse
 from typing import Optional
 import uvicorn
 from datetime import datetime
@@ -32,15 +34,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models
-class ChatRequest(BaseModel):
-    message: str
-    language: str = "arabic"
-
-class ChatResponse(BaseModel):
-    response: str
-    language: str
-    timestamp: str
 
 class VoiceTranscriptionResponse(BaseModel):
     transcription: str
@@ -70,12 +63,12 @@ async def chat_with_bulbul(request: ChatRequest):
     """
     # Simple response for now - will be replaced with actual LLM integration
     if request.language == "arabic":
-        response = "مرحباً! أنا بلبل، صديقك في تعلم اللغة العربية. كيف يمكنني مساعدتك اليوم؟"
+        response = query_gemini(request)
     else:
-        response = "Hello! I'm Bulbul, your Arabic learning companion. How can I help you today?"
+        response = query_gemini(request)
     
     return ChatResponse(
-        response=response,
+        response=response.response,
         language=request.language,
         timestamp=datetime.now().isoformat()
     )

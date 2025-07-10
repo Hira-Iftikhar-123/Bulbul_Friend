@@ -8,3 +8,4 @@ sounddevice
 numpy
 scipy
 ffmpeg-python 
+google.generativeai
