@@ -3,5 +3,8 @@
     "python.analysis.extraPaths": ["./backend"],
     "python.analysis.autoImportCompletions": true,
     "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.ignore": ["E501"]
+    "python.analysis.ignore": [
+        "E501"
+    ],
+    "i18n-ally.localesPaths": []
 } 
