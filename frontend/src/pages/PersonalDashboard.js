@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown'
 
 const arcColor = '#3e2912';
 const arcBgColor = '#a88a6a';
@@ -11,6 +12,8 @@ const PersonalDashboard = () => {
   const [showLogout, setShowLogout] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [llmResponse, setLlmResponse] = useState(false)
+  const [llmresult, setLlmResult] = useState('')
   const [notifications, setNotifications] = useState([
     "Your lesson with Bulbul tutor is tomorrow at 10am",
     "New quiz unlocked in Module 3",
@@ -226,7 +229,8 @@ const PersonalDashboard = () => {
       if (chatResponse.ok) {
         const chatResult = await chatResponse.json();
         console.log('Chat response:', chatResult.response);
-        // You can display the chat response here or navigate to chat page
+        setLlmResult(chatResult.response)
+        setLlmResponse(true)
       }
     } catch (error) {
       console.error('Error sending to chat:', error);
@@ -282,6 +286,8 @@ const PersonalDashboard = () => {
       personaBg: 'rgba(255,255,255,0.15)',
     }
   };
+
+  
 
   const colors = themeColors[isDarkMode ? 'dark' : 'light'];
 
@@ -620,6 +626,66 @@ const PersonalDashboard = () => {
           </button>
         </div>
       </div>
+
+      {/* LLM Response */}
+      {llmResponse && (
+        <div style={{
+          background: colors.cardBg,
+          borderRadius: 24,
+          padding: '32px 32px 28px 32px',
+          maxWidth: 420,
+          minWidth: 340,
+          margin: '0 auto',
+          boxShadow: '0 6px 24px rgba(90, 60, 26, 0.13)',
+          marginTop: 18,
+          marginBottom: 32,
+          border: `1.5px solid ${colors.cardBorder}`,
+          backdropFilter: 'blur(2px)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ 
+            fontSize: 32, 
+            color: colors.textPrimary, 
+            fontWeight: 800, 
+            marginBottom: 24, 
+            textAlign: 'center', 
+            letterSpacing: 0.5 
+          }}>
+            Bulbul's Response
+          </div>
+          <div style={{
+            background: colors.personaBg,
+            borderRadius: 16,
+            padding: '20px 24px',
+            color: colors.textPrimary,
+            boxShadow: '0 2px 8px rgba(90,60,26,0.07)',
+            fontFamily: "'Merriweather', Georgia, serif",
+            fontSize: 18,
+            fontWeight: 500,
+            lineHeight: 1.6,
+            border: `1px solid ${colors.cardBorder}`,
+            textAlign: 'left',
+          }}>
+           <ReactMarkdown
+        children={llmresult}
+        components={{
+          strong: ({ node, ...props }) => (
+            <strong style={{ fontWeight: 700 }}>{props.children}</strong>
+          ),
+          p: ({ node, ...props }) => <p style={{
+            margin: 0,
+            fontFamily: "'Merriweather', Georgia, serif",
+            fontSize: 18,
+            fontWeight: 500,
+            lineHeight: 1.6,
+            textAlign: 'left',
+            color: colors.textPrimary,
+          }}>{props.children}</p>
+        }}
+      />
+          </div>
+        </div>
+      )}
 
       {/* Tutor Persona */}
       <div style={{

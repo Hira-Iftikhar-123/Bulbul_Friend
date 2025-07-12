@@ -2,6 +2,7 @@ import google.generativeai as genai
 from models import ChatRequest, ChatResponse
 from datetime import datetime
 import re
+from typing import List
 
 API_KEY = "AIzaSyAXyPvVUS6_nAPC0rzRpYTRz69W9mK7HWs"
 genai.configure(api_key=API_KEY) # type: ignore
@@ -14,7 +15,6 @@ def postprocess_response(response:str) -> str:
         return "Sorry, I didn't understand that."
     
     response = re.sub(r'e \*', r'*', response) # Fix the artifact
-    response = re.sub(r'\s*\*\s*', r'\n* ', response)
     if response.endswith('.'):
         response = response[:-1]
         return response
@@ -22,9 +22,10 @@ def postprocess_response(response:str) -> str:
         response += '.'
     return response
 
-def query_gemini(prompt: ChatRequest) -> ChatResponse:
+def query_gemini(prompt: ChatRequest, history: list[dict]) -> ChatResponse:
     try:
-        response = model.generate_content(prompt.message)
+        chat_history = history + [{"role":"user", "parts":prompt.message}]
+        response = model.generate_content(chat_history)
         processed_response = postprocess_response(response.text)
         return ChatResponse(
             response=processed_response,
@@ -32,8 +33,9 @@ def query_gemini(prompt: ChatRequest) -> ChatResponse:
             timestamp=datetime.utcnow().isoformat()
         )
     except Exception as e:
+        print(history)
         return ChatResponse(
-            response=f"error",
+            response=f"error {e}",
             language=prompt.language,
             timestamp=datetime.utcnow().isoformat()
         )

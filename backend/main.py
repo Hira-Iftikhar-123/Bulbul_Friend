@@ -55,6 +55,7 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
+user_histories = []
 # Basic chat endpoint
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_bulbul(request: ChatRequest):
@@ -63,10 +64,13 @@ async def chat_with_bulbul(request: ChatRequest):
     """
     # Simple response for now - will be replaced with actual LLM integration
     if request.language == "arabic":
-        response = query_gemini(request)
+        response = query_gemini(request, user_histories)
     else:
-        response = query_gemini(request)
+        response = query_gemini(request,user_histories)
     
+    if response.response!="error":
+        user_histories.append({"role":"user", "parts":[request.message]})
+        user_histories.append({"role":"model", "parts":[response.response]})
     return ChatResponse(
         response=response.response,
         language=request.language,
