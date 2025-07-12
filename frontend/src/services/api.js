@@ -57,7 +57,7 @@ export const authAPI = {
 // Conversation API
 export const conversationAPI = {
   chat: (message, language = 'arabic', context = null) => {
-    return api.post('/api/conversation/chat', {
+    return api.post('/api/chat', {
       message,
       language,
       context,
