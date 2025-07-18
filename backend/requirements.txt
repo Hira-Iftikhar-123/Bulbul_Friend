@@ -7,5 +7,7 @@ python-multipart
 sounddevice
 numpy
 scipy
-ffmpeg-python 
+ffmpeg-python
 google.generativeai
+websockets>=11.0.0
+python-socketio>=5.8.0
