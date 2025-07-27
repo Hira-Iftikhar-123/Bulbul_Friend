@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from GeminiLLM import query_gemini
 from pydantic import BaseModel
@@ -12,6 +12,9 @@ import whisper
 import tempfile
 import os
 import ffmpeg
+from openai_test import process_audio_with_llm
+from gemini_test import gemini_response
+from fastapi.responses import Response
 
 # Load Whisper model
 model = whisper.load_model("base")
@@ -33,6 +36,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 class VoiceTranscriptionResponse(BaseModel):
@@ -182,6 +186,61 @@ async def record_and_transcribe(duration: int = 5, sample_rate: int = 16000):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Recording/transcription failed: {str(e)}")
+    
+@app.post("/api/process-audio")
+async def getresponse_openai(
+    audio: UploadFile = File(...)
+):
+    try:
+        # Save the uploaded webm file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as tmp_webm:
+            tmp_webm.write(await audio.read())
+            tmp_webm_path = tmp_webm.name
+
+        # Convert webm to mp3
+        tmp_mp3_path = tmp_webm_path.replace('.webm', '.mp3')
+        try:
+            (
+                ffmpeg
+                .input(tmp_webm_path)
+                .output(tmp_mp3_path, format='mp3')
+                .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
+            )
+        except ffmpeg.Error as e:
+            os.unlink(tmp_webm_path)
+            raise HTTPException(status_code=500, detail=f"FFmpeg error: {e.stderr.decode()}")
+
+        # Read the converted mp3 file
+        with open(tmp_mp3_path, "rb") as f:
+            audio_data = f.read()
+
+        # Clean up temporary files
+        os.unlink(tmp_webm_path)
+        os.unlink(tmp_mp3_path)
+
+        response_data = process_audio_with_llm(audio_data)
+        return Response(
+            content=response_data,
+            media_type="audio/mpeg",
+            headers={"Content-Disposition":"attachment; filename=response.mp3"}
+        )
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/api/gemini-process")
+async def getresponse_gemini(
+    audio: UploadFile = File(...)
+):
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
+            tmp.write(await audio.read())
+            tmp_path = tmp.name
+        response_data = gemini_response(tmp_path)
+        os.unlink(tmp_path)
+        return {"response": response_data}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -190,4 +249,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
         log_level="info"
-    ) 
+    )

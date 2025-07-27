@@ -12,8 +12,7 @@ const PersonalDashboard = () => {
   const [showLogout, setShowLogout] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [llmResponse, setLlmResponse] = useState(false)
-  const [llmresult, setLlmResult] = useState('')
+  const [llmResponse, setLlmResponse] = useState(null)
   const [notifications, setNotifications] = useState([
     "Your lesson with Bulbul tutor is tomorrow at 10am",
     "New quiz unlocked in Module 3",
@@ -22,8 +21,8 @@ const PersonalDashboard = () => {
   // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevels, setAudioLevels] = useState(new Array(10).fill(0));
-  const [transcription, setTranscription] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('openai')
   
   const mediaRecorderRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -110,7 +109,6 @@ const PersonalDashboard = () => {
       if (!stream) return;
 
       setIsRecording(true);
-      setTranscription('');
       setIsProcessing(false);
 
       // Start audio level monitoring
@@ -135,13 +133,7 @@ const PersonalDashboard = () => {
 
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        // Try file upload first, fallback to direct recording
-        try {
-          await transcribeAudio(audioBlob);
-        } catch (error) {
-          console.log('File upload failed, trying direct recording...');
-          await transcribeDirectRecording();
-        }
+        await processAudio(audioBlob);
       };
 
       mediaRecorderRef.current.start();
@@ -175,91 +167,45 @@ const PersonalDashboard = () => {
     }
   };
 
-  // Transcribe audio using direct recording endpoint
-  const transcribeAudio = async (audioBlob) => {
+  const processAudio = async (audioBlob) => {
     try {
-      setIsProcessing(true);
-
-      // Upload the audio blob to the backend
+      setIsProcessing(true)
+      
       const formData = new FormData();
-      formData.append('audio_file', audioBlob, 'recording.webm');
+      formData.append('audio', audioBlob, 'recording.webm')
 
-      const response = await fetch('http://localhost:8000/api/transcribe-voice', {
+
+    const endpoint = selectedProvider === 'openai'
+      ? 'http://localhost:8000/api/process-audio'
+      : 'http://localhost:8000/api/gemini-process';
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
       });
 
-      if (!response.ok) {
-        // fallback to direct recording endpoint
-        console.log('File upload failed, trying direct recording...');
-        await transcribeDirectRecording();
-        return;
+      if(!response.ok) throw new Error('API request failed');
+
+      if(selectedProvider === 'openai'){
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setLlmResponse({type: 'audio', url:audioUrl})
       }
-
-      const result = await response.json();
-      if (!result.transcription.trim()) {
-        setTranscription('Sorry, to get an answer you should say something!');
-        return;
+      else {
+        const data = await response.json()
+        setLlmResponse({type:'text', content: data.response})
       }
-      setTranscription(result.transcription);
-      await sendToChat(result.transcription, result.language);
-
-    } catch (error) {
-      console.error('Error transcribing audio:', error);
-      setTranscription('Error transcribing audio. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Send transcribed text to chat endpoint
-  const sendToChat = async (message, language) => {
-    try {
-      const chatResponse = await fetch('http://localhost:8000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: message,
-          language: language || 'arabic'
-        }),
+    }catch(e){
+      console.log('Error processing audio:', e)
+      setLlmResponse({
+        type:'error',
+        content:`Error with ${selectedProvider}: ${e.message}`
       });
-
-      if (chatResponse.ok) {
-        const chatResult = await chatResponse.json();
-        console.log('Chat response:', chatResult.response);
-        setLlmResult(chatResult.response)
-        setLlmResponse(true)
-      }
-    } catch (error) {
-      console.error('Error sending to chat:', error);
+    }finally {
+      setIsProcessing(false)
     }
-  };
+  }
 
-  // Fallback: Use direct recording endpoint
-  const transcribeDirectRecording = async () => {
-    try {
-      console.log('Using direct recording endpoint...');
-      const response = await fetch('http://localhost:8000/api/record-and-transcribe?duration=3', {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      setTranscription(result.transcription);
-      await sendToChat(result.transcription, result.language);
-      
-    } catch (error) {
-      console.error('Error with direct recording:', error);
-      setTranscription('Error transcribing audio. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const themeColors = {
     light: {
@@ -487,6 +433,26 @@ const PersonalDashboard = () => {
       }}>
         <div style={{ fontSize: 32, color: colors.textPrimary, fontWeight: 800, marginBottom: 24, textAlign: 'center', letterSpacing: 0.5 }}>Voice Chat</div>
         
+        <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+          <select
+            value={selectedProvider}
+            onChange={(e) => setSelectedProvider(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: `1px solid ${colors.cardBorder}`,
+              background: colors.personaBg,
+              color: colors.textPrimary,
+              fontFamily: "'Merriweather', Georgia, serif",
+              fontSize: '16px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+          </select>
+        </div>
+
         {/* Voice Wave Animation */}
         <div style={{ 
           display: 'flex', 
@@ -538,23 +504,6 @@ const PersonalDashboard = () => {
           </div>
         )}
 
-        {/* Transcription Result */}
-        {transcription && !isRecording && !isProcessing && (
-          <div style={{ 
-            fontSize: 16, 
-            color: '#27ae60', 
-            fontWeight: 500, 
-            marginBottom: 16,
-            padding: '12px 20px',
-            backgroundColor: 'rgba(39, 174, 96, 0.1)',
-            borderRadius: 8,
-            border: '1px solid rgba(39, 174, 96, 0.3)',
-            fontFamily: "'Merriweather', Georgia, serif",
-            textAlign: 'center'
-          }}>
-            "{transcription}"
-          </div>
-        )}
 
         {/* Voice Control Buttons */}
         <div style={{ 
@@ -643,13 +592,13 @@ const PersonalDashboard = () => {
           backdropFilter: 'blur(2px)',
           transition: 'all 0.3s ease',
         }}>
-          <div style={{ 
-            fontSize: 32, 
-            color: colors.textPrimary, 
-            fontWeight: 800, 
-            marginBottom: 24, 
-            textAlign: 'center', 
-            letterSpacing: 0.5 
+          <div style={{
+            fontSize: 32,
+            color: colors.textPrimary,
+            fontWeight: 800,
+            marginBottom: 24,
+            textAlign: 'center',
+            letterSpacing: 0.5
           }}>
             Bulbul's Response
           </div>
@@ -666,23 +615,27 @@ const PersonalDashboard = () => {
             border: `1px solid ${colors.cardBorder}`,
             textAlign: 'left',
           }}>
-           <ReactMarkdown
-        children={llmresult}
-        components={{
-          strong: ({ node, ...props }) => (
-            <strong style={{ fontWeight: 700 }}>{props.children}</strong>
-          ),
-          p: ({ node, ...props }) => <p style={{
-            margin: 0,
-            fontFamily: "'Merriweather', Georgia, serif",
-            fontSize: 18,
-            fontWeight: 500,
-            lineHeight: 1.6,
-            textAlign: 'left',
-            color: colors.textPrimary,
-          }}>{props.children}</p>
-        }}
-      />
+            {llmResponse.type === 'audio' && <audio controls src={llmResponse.url} style={{width: '100%'}}/>}
+            {llmResponse.type === 'text' && (
+              <ReactMarkdown
+                children={llmResponse.content}
+                components={{
+                  strong: ({ node, ...props }) => (
+                    <strong style={{ fontWeight: 700 }}>{props.children}</strong>
+                  ),
+                  p: ({ node, ...props }) => <p style={{
+                    margin: 0,
+                    fontFamily: "'Merriweather', Georgia, serif",
+                    fontSize: 18,
+                    fontWeight: 500,
+                    lineHeight: 1.6,
+                    textAlign: 'left',
+                    color: colors.textPrimary,
+                  }}>{props.children}</p>
+                }}
+              />
+            )}
+            {llmResponse.type === 'error' && <p style={{color: '#e74c3c'}}>{llmResponse.content}</p>}
           </div>
         </div>
       )}

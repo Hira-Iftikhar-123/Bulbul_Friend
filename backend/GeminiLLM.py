@@ -25,7 +25,7 @@ def postprocess_response(response:str) -> str:
 def query_gemini(prompt: ChatRequest, history: list[dict]) -> ChatResponse:
     try:
         chat_history = history + [{"role":"user", "parts":prompt.message}]
-        response = model.generate_content(chat_history)
+        response = model.generate_content(prompt.message)
         processed_response = postprocess_response(response.text)
         return ChatResponse(
             response=processed_response,
