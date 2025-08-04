@@ -37,6 +37,21 @@ const PersonalDashboard = () => {
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
+  useEffect(() => {
+    if (llmResponse?.type === 'text' && llmResponse.content) {
+      try {
+        const parsedContent = JSON.parse(llmResponse.content);
+        if (parsedContent.text) {
+          setLlmResponse(prev => ({
+            ...prev,
+            content: parsedContent.text,
+          }));
+        }
+      } catch (error) {
+        // Not a JSON object, likely plain text
+      }
+    }
+  }, [llmResponse]);
 
   // Cleanup voice recording on unmount
   useEffect(() => {
@@ -192,8 +207,54 @@ const PersonalDashboard = () => {
         setLlmResponse({type: 'audio', url:audioUrl})
       }
       else {
-        const data = await response.json()
-        setLlmResponse({type:'text', content: data.response})
+        setLlmResponse({ type: 'text', content: '' });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        const processText = async () => {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (buffer.trim()) {
+              try {
+                const chunk = JSON.parse(buffer);
+                if (chunk.text) {
+                  setLlmResponse(prev => ({
+                    ...prev,
+                    content: (prev?.content || '') + chunk.text,
+                  }));
+                }
+              } catch (error) {
+                console.error('Failed to parse final JSON chunk:', buffer, error);
+              }
+            }
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep the potentially incomplete last line
+
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const chunk = JSON.parse(line);
+                if (chunk.text) {
+                  setLlmResponse(prev => ({
+                    ...prev,
+                    content: (prev?.content || '') + chunk.text,
+                  }));
+                }
+              } catch (error) {
+                console.error('Failed to parse JSON chunk:', line, error);
+              }
+            }
+          }
+          
+          await processText(); // Continue reading
+        };
+
+        await processText();
       }
     }catch(e){
       console.log('Error processing audio:', e)

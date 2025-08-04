@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from GeminiLLM import query_gemini
@@ -12,9 +13,12 @@ import whisper
 import tempfile
 import os
 import ffmpeg
+import subprocess
+from io import BytesIO
+from fastapi import UploadFile, File
 from openai_test import process_audio_with_llm
 from gemini_test import gemini_response
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 # Load Whisper model
 model = whisper.load_model("base")
@@ -191,34 +195,10 @@ async def record_and_transcribe(duration: int = 5, sample_rate: int = 16000):
 async def getresponse_openai(
     audio: UploadFile = File(...)
 ):
+
     try:
-        # Save the uploaded webm file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as tmp_webm:
-            tmp_webm.write(await audio.read())
-            tmp_webm_path = tmp_webm.name
-
-        # Convert webm to mp3
-        tmp_mp3_path = tmp_webm_path.replace('.webm', '.mp3')
-        try:
-            (
-                ffmpeg
-                .input(tmp_webm_path)
-                .output(tmp_mp3_path, format='mp3')
-                .run(overwrite_output=True, capture_stdout=True, capture_stderr=True)
-            )
-        except ffmpeg.Error as e:
-            os.unlink(tmp_webm_path)
-            raise HTTPException(status_code=500, detail=f"FFmpeg error: {e.stderr.decode()}")
-
-        # Read the converted mp3 file
-        with open(tmp_mp3_path, "rb") as f:
-            audio_data = f.read()
-
-        # Clean up temporary files
-        os.unlink(tmp_webm_path)
-        os.unlink(tmp_mp3_path)
-
-        response_data = process_audio_with_llm(audio_data)
+        audio_data = convert_webm_to_mp3_bytes(await audio.read())
+        response_data = await process_audio_with_llm(audio_data)
         return Response(
             content=response_data,
             media_type="audio/mpeg",
@@ -227,19 +207,40 @@ async def getresponse_openai(
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
     
+def convert_webm_to_mp3_bytes(webm_bytes: bytes) -> bytes:
+    process = subprocess.Popen(
+        ['ffmpeg', '-i', 'pipe:0', '-ar', '16000', '-ac', '1', '-f', 'mp3', 'pipe:1'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    mp3_bytes, stderr = process.communicate(input=webm_bytes)
+    if process.returncode != 0:
+        raise RuntimeError(f"ffmpeg error: {stderr.decode()}")
+    return mp3_bytes
+
+
 @app.post("/api/gemini-process")
 async def getresponse_gemini(
     audio: UploadFile = File(...)
 ):
     try:
+        audio_bytes = await audio.read()
+        mp3_bytes = convert_webm_to_mp3_bytes(audio_bytes)
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
-            tmp.write(await audio.read())
+            tmp.write(mp3_bytes)
             tmp_path = tmp.name
-        response_data = gemini_response(tmp_path)
-        os.unlink(tmp_path)
-        return {"response": response_data}
+
+        def streamer():
+            try:
+                for chunk in gemini_response(tmp_path):
+                    yield chunk
+            finally:
+                os.unlink(tmp_path)
+
+        return StreamingResponse(streamer(), media_type="application/json")
+
     except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

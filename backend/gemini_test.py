@@ -1,8 +1,12 @@
+from asyncio import timeout
+from datetime import time
 from google import genai
 import dotenv
 import os
+from typing import Generator
+import json
 
-def gemini_response(tmp_path:str) -> str | None:
+def gemini_response(tmp_path:str) -> Generator[str, None, None]:
     dotenv.load_dotenv('.env.local')
     API_KEY = os.getenv('GOOGLE_API_KEY')
     client = genai.Client(api_key=API_KEY)
@@ -10,11 +14,16 @@ def gemini_response(tmp_path:str) -> str | None:
 
     audio_file=client.files.upload(file=tmp_path)
 
-    response=client.models.generate_content(
+    response=client.models.generate_content_stream(
         model=MODEL_ID,
         contents=[
             "respond to this audio like you are an arabic tutor",
             audio_file
         ]
     )
-    return response.text
+    full_response = ""
+    i=0
+    for chunk in response:
+        if chunk.text:
+            yield f"{json.dumps({'text': chunk.text})}\n"
+
