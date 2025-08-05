@@ -22,12 +22,14 @@ const PersonalDashboard = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevels, setAudioLevels] = useState(new Array(10).fill(0));
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState('openai')
+  const [selectedProvider, setSelectedProvider] = useState('openai');
+  const [finalTranscript, setFinalTranscript] = useState('');
   
   const mediaRecorderRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -64,6 +66,15 @@ const PersonalDashboard = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -119,39 +130,86 @@ const PersonalDashboard = () => {
 
   // Start recording
   const startRecording = async () => {
+    console.log("isRecording", isRecording)
+    console.log(mediaRecorderRef)
+    console.log(mediaRecorderRef.current?.state)
     try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        console.warn("Already recording");
+        return;
+      }
       const stream = await initializeAudio();
       if (!stream) return;
 
       setIsRecording(true);
       setIsProcessing(false);
+      audioChunksRef.current = []; // Clear previous chunks
 
       // Start audio level monitoring
       updateAudioLevels();
 
       // Create MediaRecorder for audio capture
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus' 
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
         : 'audio/webm';
       
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        mimeType: mimeType
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000 // Ensure consistent audio quality
       });
 
-      const chunks = [];
+      mediaRecorderRef.current = mediaRecorder;
+      const CHUNK_INTERVAL = 5000;
       
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
+      // Set up event handlers before starting
+      mediaRecorderRef.current.ondataavailable = async (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          if (audioBlob.size > 2000) {
+            console.log('Processing cumulative audio, size:', audioBlob.size);
+            processAudio(audioBlob, false); // isFinal is false for intermediate chunks
+          } else {
+            console.log('Skipping small or empty audio blob:', audioBlob.size);
+          }
         }
       };
 
       mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        await processAudio(audioBlob);
+        console.log("MediaRecorder stopped");
+
+        // Process the final, complete audio blob
+        if (audioChunksRef.current.length > 0) {
+          const finalAudioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          if (finalAudioBlob.size > 2000) {
+            console.log('Processing final audio, size:', finalAudioBlob.size);
+            await processAudio(finalAudioBlob, true); // Pass isFinal = true
+          }
+        }
+        
+        audioChunksRef.current = []; // Clear chunks on stop
+
+        // Stop all tracks from the stream to release the microphone
+        if (mediaRecorderRef.current?.stream) {
+          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+        mediaRecorderRef.current = null;
+        setIsRecording(false);
+
+        // Stop audio level monitoring
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        
+        // Close audio context
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
       };
 
-      mediaRecorderRef.current.start();
+      // Start recording with chunk interval
+      mediaRecorderRef.current.start(CHUNK_INTERVAL);
       
     } catch (error) {
       console.error('Error starting recording:', error);
@@ -161,50 +219,62 @@ const PersonalDashboard = () => {
 
   // Stop recording
   const stopRecording = () => {
+    console.log("isRecording", isRecording)
+    console.log(mediaRecorderRef.current?.state)
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Stop audio level monitoring
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      
-      // Close audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-      
-      // Stop all tracks
-      if (mediaRecorderRef.current.stream) {
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
+      mediaRecorderRef.current.stop(); // This will trigger onstop, which handles cleanup.
     }
   };
 
-  const processAudio = async (audioBlob) => {
+  const processAudio = async (audioBlob, isFinal = false) => {
     try {
       setIsProcessing(true)
+      
+      console.log('Processing audio chunk, size:', audioBlob.size, 'type:', audioBlob.type);
+      
+      // Validate audio blob
+      if (audioBlob.size < 2000) {
+        console.log('Audio chunk too small, skipping');
+        return;
+      }
       
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm')
 
-
-    const endpoint = selectedProvider === 'openai'
-      ? 'http://localhost:8000/api/process-audio'
-      : 'http://localhost:8000/api/gemini-process';
+      const endpoint = selectedProvider === 'openai'
+        ? 'http://localhost:8000/api/openai'
+        : 'http://localhost:8000/api/gemini-process';
 
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
+        signal: AbortSignal.timeout(30000), // 30 second timeout
       });
 
-      if(!response.ok) throw new Error('API request failed');
+      if(!response.ok) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          errorText = 'Failed to read error response';
+        }
+        console.error('API request failed:', response.status, errorText);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+      }
 
       if(selectedProvider === 'openai'){
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setLlmResponse({type: 'audio', url:audioUrl})
+        const result = await response.json();
+        console.log(result)
+        const transcript = result?.text
+        setLlmResponse((prev) => ({
+            ...prev,
+            type: "text",
+            content: transcript, // Replace with the latest full transcript
+          }));
+        if (isFinal) {
+          setFinalTranscript(transcript);
+          console.log("Final transcript:", transcript); // For debugging
+        }
       }
       else {
         setLlmResponse({ type: 'text', content: '' });
@@ -257,7 +327,7 @@ const PersonalDashboard = () => {
         await processText();
       }
     }catch(e){
-      console.log('Error processing audio:', e)
+      console.error('Error processing audio:', e)
       setLlmResponse({
         type:'error',
         content:`Error with ${selectedProvider}: ${e.message}`
