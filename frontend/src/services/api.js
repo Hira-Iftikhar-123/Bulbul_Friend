@@ -149,6 +149,52 @@ export const chatAPI = {
   },
 };
 
+// Streaming TTS API
+export const streamingTTSAPI = {
+  processAudio: async (audioFile, onChunk) => {
+    const formData = new FormData();
+    formData.append('audio', audioFile);
+    
+    try {
+      const response = await fetch('http://localhost:8000/api/streaming-tts-fixed', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const chunk = JSON.parse(line);
+              onChunk(chunk);
+            } catch (e) {
+              console.warn('Failed to parse JSON chunk:', line);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Streaming TTS error:', error);
+      throw error;
+    }
+  },
+};
+
 // Health check
 export const healthAPI = {
   check: () => {

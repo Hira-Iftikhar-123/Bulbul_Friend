@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { chatAPI } from '../services/api';
+import AudioRecorder from '../components/AudioRecorder';
 
 const Chat = () => {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState('arabic');
+  const [showVoiceChat, setShowVoiceChat] = useState(false);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -35,18 +37,36 @@ const Chat = () => {
       <div className="card">
         <h1 className="text-2xl font-bold mb-4">Chat with Bulbul</h1>
         
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Language:
-          </label>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="input-field w-auto"
-          >
-            <option value="arabic">العربية</option>
-            <option value="english">English</option>
-          </select>
+        <div className="mb-4 flex justify-between items-center">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Language:
+            </label>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="input-field w-auto"
+            >
+              <option value="arabic">العربية</option>
+              <option value="english">English</option>
+            </select>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowVoiceChat(!showVoiceChat)}
+              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium"
+            >
+              {showVoiceChat ? 'Hide Voice Chat' : 'Show Voice Chat'}
+            </button>
+            
+            <a
+              href="/streaming-tts-test"
+              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium"
+            >
+              Full TTS Test
+            </a>
+          </div>
         </div>
 
         <form onSubmit={sendMessage} className="mb-6">
@@ -75,6 +95,16 @@ const Chat = () => {
             <div className={language === 'arabic' ? 'arabic-text' : ''}>
               {response}
             </div>
+          </div>
+        )}
+
+        {showVoiceChat && (
+          <div className="card bg-white border-2 border-purple-200">
+            <AudioRecorder 
+              onResponse={(chunk) => {
+                console.log('Streaming TTS chunk received:', chunk);
+              }}
+            />
           </div>
         )}
       </div>

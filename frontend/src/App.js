@@ -4,6 +4,7 @@ import Landing from './pages/Landing';
 import Chat from './pages/Chat';
 import Auth from './pages/Auth';
 import PersonalDashboard from './pages/PersonalDashboard';
+import StreamingTTSTest from './pages/StreamingTTSTest';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="/chat" element={<Chat />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<PersonalDashboard />} />
+          <Route path="/streaming-tts-test" element={<StreamingTTSTest />} />
         </Routes>
       </main>
     </div>
