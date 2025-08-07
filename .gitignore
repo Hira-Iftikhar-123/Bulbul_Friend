@@ -293,3 +293,12 @@ local/
 !SETUP.md
 !WALLPAPER_OPTIMIZATION.md
 !STREAMING_TTS_README.md
+
+# .gitignore
+venv/
+backend/venv/
+*.pyc
+__pycache__/
+*.pyd
+*.dll
+*.lib
