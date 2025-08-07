@@ -242,8 +242,8 @@ const PersonalDashboard = () => {
       formData.append('audio', audioBlob, 'recording.webm')
 
       const endpoint = selectedProvider === 'openai'
-        ? 'http://localhost:8000/api/openai'
-        : 'http://localhost:8000/api/gemini-process';
+        ? 'http://localhost:8000/api/streaming-tts-fixed'
+        : 'http://localhost:8000/api/streaming-tts-fixed';
 
       const response = await fetch(endpoint, {
         method: 'POST',

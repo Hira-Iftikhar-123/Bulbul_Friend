@@ -1,6 +1,6 @@
 from asyncio import timeout
 from datetime import time
-from google import genai
+import google.generativeai as genai
 import dotenv
 import os
 from typing import Generator
