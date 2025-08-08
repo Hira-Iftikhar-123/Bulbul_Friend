@@ -151,9 +151,9 @@ export const chatAPI = {
 
 // Streaming TTS API
 export const streamingTTSAPI = {
-  processAudio: async (audioFile, onChunk) => {
+  processAudio: async (transcript, onChunk) => {
     const formData = new FormData();
-    formData.append('audio', audioFile);
+    formData.append('transcript',transcript );
     
     try {
       const response = await fetch('http://localhost:8000/api/streaming-tts-fixed', {

@@ -101,9 +101,7 @@ const Chat = () => {
         {showVoiceChat && (
           <div className="card bg-white border-2 border-purple-200">
             <AudioRecorder 
-              onResponse={(chunk) => {
-                console.log('Streaming TTS chunk received:', chunk);
-              }}
+              onResponse={(chunk) => console.log('Streaming TTS chunk received:', chunk)}
             />
           </div>
         )}

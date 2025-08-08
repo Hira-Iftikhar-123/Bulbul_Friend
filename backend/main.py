@@ -146,7 +146,7 @@ async def openaipipe(
     audio: UploadFile = File(...)
 ):
     try:
-        transcript_text = await OpenAIAudio(audio)
+        transcript_text = await OpenAIAudio(audio) # type: ignore
         return {"text": transcript_text}
     except Exception as e:
         print(f"Error in openaipipe: {e}")
@@ -177,13 +177,17 @@ async def streaming_tts_fixed_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class TranscriptRequest(BaseModel):
+    transcript: str
+    language: Optional[str] = 'arabic'
+
 @app.post("/api/streaming-tts-transcript")
 async def streaming_tts_transcript_endpoint(
-    transcript:str
+    request: TranscriptRequest
 ):
     try:
         async def streamer():
-            async for chunk in process_transcript_with_streaming_tts_fixed(transcript):
+            async for chunk in process_transcript_with_streaming_tts_fixed(request.transcript):
                 yield chunk
         
         return StreamingResponse(

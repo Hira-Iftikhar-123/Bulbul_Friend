@@ -6,8 +6,7 @@ const AudioRecorder = ({ onResponse }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [responseText, setResponseText] = useState('');
-  const [audioChunks, setAudioChunks] = useState([]);
-  const [currentAudio, setCurrentAudio] = useState(null);
+  const audioChunksRef = useRef([]);
   const [audioLevel, setAudioLevel] = useState(0);
   const [finalTranscript, setFinalTranscript] = useState('');
   const mediaRecorderRef = useRef(null);
@@ -18,85 +17,76 @@ const AudioRecorder = ({ onResponse }) => {
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           sampleRate: 44100
-        } 
+        }
       });
       
       streamRef.current = stream;
       
-      // Try different MIME types in order of preference
       const mimeTypes = [
         'audio/webm;codecs=opus',
         'audio/webm',
-        'audio/mp4',
-        'audio/ogg;codecs=opus'
       ];
       
-      let selectedMimeType = null;
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          selectedMimeType = mimeType;
-          break;
-        }
-      }
+      let selectedMimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
       
       if (!selectedMimeType) {
         throw new Error('No supported audio format found');
       }
       
-      console.log('Using MIME type:', selectedMimeType);
-      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: selectedMimeType
+        mimeType: selectedMimeType,
+        audioBitsPerSecond: 128000
       });
       
       mediaRecorderRef.current = mediaRecorder;
-      setAudioChunks([]);
-      // Clear audio queue when starting new recording
+      audioChunksRef.current = [];
       audioQueueRef.current = [];
       isPlayingAudioRef.current = false;
       
+      const CHUNK_INTERVAL = 5000;
+
       mediaRecorder.ondataavailable = (event) => {
-        console.log('Data available:', event.data.size, 'bytes');
-        if (event.data.size > 0) {
-          setAudioChunks(prev => [...prev, event.data]);
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+          const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
+          if (audioBlob.size > 2000) {
+            processAudio(audioBlob, false);
+          }
         }
       };
       
       mediaRecorder.onstop = () => {
         console.log('Recording stopped');
-        // Use a callback to get the latest audioChunks state
-        setAudioChunks(prevChunks => {
-          console.log('Final chunks count:', prevChunks.length);
-          const audioBlob = new Blob(prevChunks, { type: selectedMimeType });
-          console.log('Audio blob size:', audioBlob.size);
-          setCurrentAudio(audioBlob);
-          stream.getTracks().forEach(track => track.stop());
-          return prevChunks;
-        });
+        setIsRecording(false);
+        setAudioLevel(0);
+
+        if (audioChunksRef.current.length > 0) {
+          const finalAudioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
+          processAudio(finalAudioBlob, true);
+        }
+        
+        audioChunksRef.current = [];
+
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
       };
       
-      mediaRecorder.onerror = (event) => {
-        console.error('MediaRecorder error:', event.error);
-        alert('Recording error: ' + event.error);
-      };
-      
-      // Start recording with 1-second timeslices for better chunking
-      mediaRecorder.start(1000);
+      mediaRecorder.start(CHUNK_INTERVAL);
       setIsRecording(true);
-      console.log('Recording started');
       
-      // Start monitoring audio levels
       startAudioLevelMonitoring(stream);
     } catch (error) {
       console.error('Error starting recording:', error);
       alert('Error accessing microphone: ' + error.message);
     }
-  }, [audioChunks]);
+  }, []);
 
   const startAudioLevelMonitoring = useCallback((stream) => {
     try {
@@ -132,86 +122,66 @@ const AudioRecorder = ({ onResponse }) => {
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      setAudioLevel(0);
-      
-      // Stop the stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
     }
   }, [isRecording]);
 
-  const processAudio = useCallback(async () => {
-    if (!currentAudio) return;
+  const processAudio = async (audioBlob, isFinal = false) => {
+    if (!audioBlob || audioBlob.size < 2000) {
+      if (isFinal) setIsProcessing(false);
+      return;
+    }
     
     setIsProcessing(true);
-    setResponseText('');
-    setTranscript('');
-    
+
     try {
-      // Create a file from the blob
-      const audioFile = new File([currentAudio], 'recording.webm', { type: 'audio/webm' });
-      
-      // First, send to /openai endpoint for STT
+      const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
       const formData = new FormData();
       formData.append('audio', audioFile);
       
       const response = await fetch('http://localhost:8000/api/openai', {
         method: 'POST',
         body: formData,
-        signal: AbortSignal.timeout(30000), // 30 second timeout
+        signal: AbortSignal.timeout(30000),
       });
 
       if (!response.ok) {
-        let errorText = '';
-        try {
-          errorText = await response.text();
-        } catch (e) {
-          errorText = 'Failed to read error response';
-        }
-        console.error('API request failed:', response.status, errorText);
+        let errorText = await response.text();
         throw new Error(`API request failed: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('STT result:', result);
-      const transcript = result?.text;
+      const transcriptText = result?.text;
       
-      if (transcript) {
-        setTranscript(transcript);
-        setFinalTranscript(transcript);
-        console.log("Final transcript:", transcript);
-        
-        // Send transcript to streaming TTS endpoint
-        try {
-          await streamingTTSAPI.processTranscript(transcript, 'arabic', (chunk) => {
-            console.log('Streaming TTS chunk received:', chunk);
-            if (chunk.text) {
-              setResponseText(prev => prev + chunk.text);
-            }
-            if (chunk.audio) {
-              // Play the audio chunk
-              playAudioChunk(chunk.audio);
-            }
-            
-            // Call the parent callback if provided
-            if (onResponse) {
-              onResponse(chunk);
-            }
-          });
-        } catch (error) {
-          console.error('Error processing transcript with streaming TTS:', error);
+      if (transcriptText) {
+        setTranscript(transcriptText);
+        if (isFinal) {
+          setFinalTranscript(transcriptText);
+          try {
+            await streamingTTSAPI.processTranscript(transcriptText, 'arabic', (chunk) => {
+              if (chunk.text) {
+                setResponseText(prev => prev + chunk.text);
+              }
+              if (chunk.audio) {
+                playAudioChunk(chunk.audio);
+              }
+              if (onResponse) {
+                onResponse(chunk);
+              }
+            });
+          } catch (error) {
+            console.error('Error processing transcript with streaming TTS:', error);
+          }
         }
       }
     } catch (error) {
       console.error('Error processing audio:', error);
       alert('Error processing audio. Please try again.');
     } finally {
-      setIsProcessing(false);
+      if (isFinal) {
+        setIsProcessing(false);
+      }
     }
-  }, [currentAudio, onResponse, playAudioChunk]);
+  };
 
   const playAudioChunk = useCallback((base64Audio) => {
     try {
@@ -272,9 +242,8 @@ const AudioRecorder = ({ onResponse }) => {
   const clearAll = useCallback(() => {
     setTranscript('');
     setResponseText('');
-    setCurrentAudio(null);
-    setAudioChunks([]);
     setFinalTranscript('');
+    audioChunksRef.current = [];
     // Clear audio queue
     audioQueueRef.current = [];
     isPlayingAudioRef.current = false;
@@ -305,15 +274,6 @@ const AudioRecorder = ({ onResponse }) => {
           {isRecording ? 'Stop Recording' : 'Start Recording'}
         </button>
         
-        {currentAudio && (
-          <button
-            onClick={processAudio}
-            disabled={isProcessing}
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isProcessing ? 'Processing...' : 'Send Audio'}
-          </button>
-        )}
         
         <button
           onClick={clearAll}
@@ -369,18 +329,6 @@ const AudioRecorder = ({ onResponse }) => {
         </div>
       )}
 
-      {currentAudio && (
-        <div className="mb-4">
-          <h4 className="font-semibold mb-2">Recorded Audio:</h4>
-          <div className="mb-2 text-sm text-gray-600">
-            Size: {(currentAudio.size / 1024).toFixed(1)} KB
-          </div>
-          <audio controls className="w-full">
-            <source src={URL.createObjectURL(currentAudio)} type={currentAudio.type} />
-            Your browser does not support the audio element.
-          </audio>
-        </div>
-      )}
     </div>
   );
 };

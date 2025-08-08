@@ -233,7 +233,7 @@ const PersonalDashboard = () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
           if (audioBlob.size > 2000) {
             console.log('Processing cumulative audio, size:', audioBlob.size);
-            processAudio(audioBlob, false); // isFinal is false for intermediate chunks
+            processAudio(audioBlob, false);
           } else {
             console.log('Skipping small or empty audio blob:', audioBlob.size);
           }
@@ -338,8 +338,6 @@ const PersonalDashboard = () => {
           }));
         if (isFinal) {
           setFinalTranscript(transcript);
-          
-          // Send transcript to streaming TTS endpoint
           try {
             await streamingTTSAPI.processTranscript(transcript, 'arabic', (chunk) => {
               console.log('Streaming TTS chunk received:', chunk);
