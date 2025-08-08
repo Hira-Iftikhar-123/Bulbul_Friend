@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown'
+import { streamingTTSAPI } from '../services/api';
 
 const arcColor = '#3e2912';
 const arcBgColor = '#a88a6a';
@@ -30,6 +31,8 @@ const PersonalDashboard = () => {
   const analyserRef = useRef(null);
   const animationFrameRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const audioQueueRef = useRef([]);
+  const isPlayingAudioRef = useRef(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -64,6 +67,9 @@ const PersonalDashboard = () => {
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
+      // Clear audio queue
+      audioQueueRef.current = [];
+      isPlayingAudioRef.current = false;
     };
   }, []);
 
@@ -83,6 +89,62 @@ const PersonalDashboard = () => {
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  const playAudioChunk = (base64Audio) => {
+    try {
+      // Decode base64 audio
+      const binaryString = atob(base64Audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Create audio blob and add to queue
+      const audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      // Add to queue
+      audioQueueRef.current.push({ audioUrl, audioBlob });
+      
+      // Start playing if not already playing
+      if (!isPlayingAudioRef.current) {
+        playNextInQueue();
+      }
+    } catch (error) {
+      console.error('Error adding audio chunk to queue:', error);
+    }
+  };
+
+  const playNextInQueue = () => {
+    if (audioQueueRef.current.length === 0) {
+      isPlayingAudioRef.current = false;
+      return;
+    }
+    
+    isPlayingAudioRef.current = true;
+    const { audioUrl, audioBlob } = audioQueueRef.current.shift();
+    
+    const audio = new Audio(audioUrl);
+    
+    audio.play().catch(error => {
+      console.error('Error playing audio:', error);
+      // Continue with next in queue even if this one fails
+      playNextInQueue();
+    });
+    
+    // When this audio finishes, play the next one
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      playNextInQueue();
+    };
+    
+    // Also handle errors to continue queue
+    audio.onerror = () => {
+      console.error('Audio playback error');
+      URL.revokeObjectURL(audioUrl);
+      playNextInQueue();
+    };
   };
 
   // Initialize audio context and analyzer
@@ -144,6 +206,9 @@ const PersonalDashboard = () => {
       setIsRecording(true);
       setIsProcessing(false);
       audioChunksRef.current = []; // Clear previous chunks
+      // Clear audio queue when starting new recording
+      audioQueueRef.current = [];
+      isPlayingAudioRef.current = false;
 
       // Start audio level monitoring
       updateAudioLevels();
@@ -183,7 +248,7 @@ const PersonalDashboard = () => {
           const finalAudioBlob = new Blob(audioChunksRef.current, { type: mimeType });
           if (finalAudioBlob.size > 2000) {
             console.log('Processing final audio, size:', finalAudioBlob.size);
-            await processAudio(finalAudioBlob, true); // Pass isFinal = true
+            await processAudio(finalAudioBlob, true); 
           }
         }
         
@@ -242,7 +307,7 @@ const PersonalDashboard = () => {
       formData.append('audio', audioBlob, 'recording.webm')
 
       const endpoint = selectedProvider === 'openai'
-        ? 'http://localhost:8000/api/streaming-tts-fixed'
+        ? 'http://localhost:8000/api/openai'
         : 'http://localhost:8000/api/gemini-process'; 
 
       const response = await fetch(endpoint, {
@@ -273,7 +338,25 @@ const PersonalDashboard = () => {
           }));
         if (isFinal) {
           setFinalTranscript(transcript);
-          console.log("Final transcript:", transcript); // For debugging
+          
+          // Send transcript to streaming TTS endpoint
+          try {
+            await streamingTTSAPI.processTranscript(transcript, 'arabic', (chunk) => {
+              console.log('Streaming TTS chunk received:', chunk);
+              if (chunk.text) {
+                setLlmResponse(prev => ({
+                  ...prev,
+                  content: (prev?.content || '') + chunk.text,
+                }));
+              }
+              if (chunk.audio) {
+                // Play the audio chunk
+                playAudioChunk(chunk.audio);
+              }
+            });
+          } catch (error) {
+            console.error('Error processing transcript with streaming TTS:', error);
+          }
         }
       }
       else {

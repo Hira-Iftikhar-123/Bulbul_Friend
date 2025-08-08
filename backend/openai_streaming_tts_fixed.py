@@ -13,12 +13,9 @@ load_dotenv('.env')
 apikey = os.getenv('OPENAI_API_KEY')
 
 async def stream_gpt4o_response_fixed(transcript: str) -> AsyncGenerator[dict, None]:
-    """
-    Fixed streaming GPT-4o response with proper error handling
-    """
     client = AsyncOpenAI(api_key=apikey)
     
-    instruction = "respond like you are an arabic instructor helping your student learn through dialogues"
+    instruction = "respond like you are an arabic instructor helping your student learn through dialogues respond in three sentences"
     
     messages: list[ChatCompletionMessageParam] = [
         {
@@ -101,9 +98,6 @@ async def stream_gpt4o_response_fixed(transcript: str) -> AsyncGenerator[dict, N
         }
 
 async def text_to_speech(text: str) -> bytes:
-    """
-    Converts text to speech using OpenAI TTS API with timeout
-    """
     client = AsyncOpenAI(api_key=apikey)
     
     try:
@@ -127,21 +121,12 @@ async def text_to_speech(text: str) -> bytes:
         print(f"Error in TTS conversion: {e}")
         return b""
 
-async def process_audio_with_streaming_tts_fixed(audio_data: bytes) -> AsyncGenerator[str, None]:
+async def process_audio_with_streaming_tts_fixed(transcript:str) -> AsyncGenerator[str, None]:
     """
     Fixed main function that processes audio input and returns streaming TTS response
     """
     try:
-        # First, transcribe the audio
-        transcript = await transcribe_audio(audio_data)
-        
-        if not transcript:
-            yield json.dumps({"error": "Could not transcribe audio"}) + "\n"
-            return
-        
-        # Then stream GPT-4o response with TTS
         async for chunk in stream_gpt4o_response_fixed(transcript):
-            # Ensure proper JSON formatting
             try:
                 json_str = json.dumps(chunk, ensure_ascii=False)
                 yield json_str + "\n"
@@ -153,52 +138,26 @@ async def process_audio_with_streaming_tts_fixed(audio_data: bytes) -> AsyncGene
         print(f"Error in main processing: {e}")
         yield json.dumps({"error": f"Processing error: {str(e)}"}) + "\n"
 
-async def transcribe_audio(audio_data: bytes) -> str:
-    """
-    Transcribes audio using OpenAI Whisper API with timeout
-    """
-    client = AsyncOpenAI(api_key=apikey)
-    
-    try:
-        # Convert to MP3 if needed
-        mp3_data = convert_to_mp3_bytes(audio_data)
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
-            temp_file.write(mp3_data)
-            temp_file_path = temp_file.name
-        
-        try:
-            with open(temp_file_path, 'rb') as audio_file:
-                response = await asyncio.wait_for(
-                    client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        response_format="json"
-                    ),
-                    timeout=30.0  # 30 second timeout
-                )
-            return response.text
-        finally:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-                
-    except asyncio.TimeoutError:
-        print("Transcription timeout")
-        return ""
-    except Exception as e:
-        print(f"Error in transcription: {e}")
-        return ""
 
-def convert_to_mp3_bytes(data: bytes) -> bytes:
-    """Converts audio data to MP3 format using ffmpeg."""
+async def process_transcript_with_streaming_tts_fixed(transcript: str) -> AsyncGenerator[str, None]:
+    """
+    New function that processes transcript input directly and returns streaming TTS response
+    """
     try:
-        process = subprocess.Popen(
-            ['ffmpeg', '-i', 'pipe:0', '-ar', '16000', '-ac', '1', '-f', 'mp3', 'pipe:1'],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        mp3_bytes, stderr = process.communicate(input=data)
-        if process.returncode != 0:
-            raise RuntimeError(f"ffmpeg error: {stderr.decode()}")
-        return mp3_bytes
-    except FileNotFoundError:
-        raise RuntimeError("ffmpeg not found. Please install ffmpeg and ensure it's in your PATH.") 
+        if not transcript:
+            yield json.dumps({"error": "Empty transcript provided"}) + "\n"
+            return
+        
+        # Stream GPT-4o response with TTS
+        async for chunk in stream_gpt4o_response_fixed(transcript):
+            # Ensure proper JSON formatting
+            try:
+                json_str = json.dumps(chunk, ensure_ascii=False)
+                yield json_str + "\n"
+            except Exception as e:
+                print(f"JSON serialization error: {e}")
+                yield json.dumps({"error": "JSON serialization failed"}) + "\n"
+                
+    except Exception as e:
+        print(f"Error in transcript processing: {e}")
+        yield json.dumps({"error": f"Processing error: {str(e)}"}) + "\n"

@@ -14,7 +14,7 @@ from openai_test import process_audio_with_llm
 from gemini_test import gemini_response
 from fastapi.responses import Response, StreamingResponse
 from openai_stream import OpenAIAudio
-from openai_streaming_tts_fixed import process_audio_with_streaming_tts_fixed
+from openai_streaming_tts_fixed import process_audio_with_streaming_tts_fixed, process_transcript_with_streaming_tts_fixed
 
 # Create FastAPI app
 app = FastAPI(
@@ -155,18 +155,11 @@ async def openaipipe(
 
 @app.post("/api/streaming-tts-fixed")
 async def streaming_tts_fixed_endpoint(
-    audio: UploadFile = File(...)
+    transcript:str
 ):
-    """
-    Fixed endpoint that processes audio input, gets transcript, streams GPT-4o response,
-    and converts each chunk to TTS audio with proper error handling
-    """
     try:
-        audio_bytes = await audio.read()
-        mp3_bytes = convert_webm_to_mp3_bytes(audio_bytes)
-        
         async def streamer():
-            async for chunk in process_audio_with_streaming_tts_fixed(mp3_bytes):
+            async for chunk in process_audio_with_streaming_tts_fixed(transcript=transcript):
                 yield chunk
         
         return StreamingResponse(
@@ -181,6 +174,30 @@ async def streaming_tts_fixed_endpoint(
         
     except Exception as e:
         print(f"Error in fixed streaming TTS endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/streaming-tts-transcript")
+async def streaming_tts_transcript_endpoint(
+    transcript:str
+):
+    try:
+        async def streamer():
+            async for chunk in process_transcript_with_streaming_tts_fixed(transcript):
+                yield chunk
+        
+        return StreamingResponse(
+            streamer(), 
+            media_type="application/json",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Content-Type": "application/json"
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error in transcript streaming TTS endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

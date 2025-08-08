@@ -9,9 +9,12 @@ const AudioRecorder = ({ onResponse }) => {
   const [audioChunks, setAudioChunks] = useState([]);
   const [currentAudio, setCurrentAudio] = useState(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [finalTranscript, setFinalTranscript] = useState('');
   const mediaRecorderRef = useRef(null);
   const audioContextRef = useRef(null);
   const streamRef = useRef(null);
+  const audioQueueRef = useRef([]);
+  const isPlayingAudioRef = useRef(false);
 
   const startRecording = useCallback(async () => {
     try {
@@ -53,6 +56,9 @@ const AudioRecorder = ({ onResponse }) => {
       
       mediaRecorderRef.current = mediaRecorder;
       setAudioChunks([]);
+      // Clear audio queue when starting new recording
+      audioQueueRef.current = [];
+      isPlayingAudioRef.current = false;
       
       mediaRecorder.ondataavailable = (event) => {
         console.log('Data available:', event.data.size, 'bytes');
@@ -148,34 +154,64 @@ const AudioRecorder = ({ onResponse }) => {
       // Create a file from the blob
       const audioFile = new File([currentAudio], 'recording.webm', { type: 'audio/webm' });
       
-      await streamingTTSAPI.processAudio(audioFile, (chunk) => {
-        console.log('Received chunk:', chunk);
-        
-        if (chunk.transcript) {
-          setTranscript(prev => prev + chunk.transcript);
-        }
-        
-        if (chunk.text) {
-          setResponseText(prev => prev + chunk.text);
-        }
-        
-        if (chunk.audio) {
-          // Play the audio chunk
-          playAudioChunk(chunk.audio);
-        }
-        
-        // Call the parent callback if provided
-        if (onResponse) {
-          onResponse(chunk);
-        }
+      // First, send to /openai endpoint for STT
+      const formData = new FormData();
+      formData.append('audio', audioFile);
+      
+      const response = await fetch('http://localhost:8000/api/openai', {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(30000), // 30 second timeout
       });
+
+      if (!response.ok) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          errorText = 'Failed to read error response';
+        }
+        console.error('API request failed:', response.status, errorText);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('STT result:', result);
+      const transcript = result?.text;
+      
+      if (transcript) {
+        setTranscript(transcript);
+        setFinalTranscript(transcript);
+        console.log("Final transcript:", transcript);
+        
+        // Send transcript to streaming TTS endpoint
+        try {
+          await streamingTTSAPI.processTranscript(transcript, 'arabic', (chunk) => {
+            console.log('Streaming TTS chunk received:', chunk);
+            if (chunk.text) {
+              setResponseText(prev => prev + chunk.text);
+            }
+            if (chunk.audio) {
+              // Play the audio chunk
+              playAudioChunk(chunk.audio);
+            }
+            
+            // Call the parent callback if provided
+            if (onResponse) {
+              onResponse(chunk);
+            }
+          });
+        } catch (error) {
+          console.error('Error processing transcript with streaming TTS:', error);
+        }
+      }
     } catch (error) {
       console.error('Error processing audio:', error);
       alert('Error processing audio. Please try again.');
     } finally {
       setIsProcessing(false);
     }
-  }, [currentAudio, onResponse]);
+  }, [currentAudio, onResponse, playAudioChunk]);
 
   const playAudioChunk = useCallback((base64Audio) => {
     try {
@@ -186,22 +222,51 @@ const AudioRecorder = ({ onResponse }) => {
         bytes[i] = binaryString.charCodeAt(i);
       }
       
-      // Create audio blob and play
+      // Create audio blob and add to queue
       const audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
       const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
       
-      audio.play().catch(error => {
-        console.error('Error playing audio:', error);
-      });
+      // Add to queue
+      audioQueueRef.current.push({ audioUrl, audioBlob });
       
-      // Clean up URL after playing
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-      };
+      // Start playing if not already playing
+      if (!isPlayingAudioRef.current) {
+        playNextInQueue();
+      }
     } catch (error) {
-      console.error('Error playing audio chunk:', error);
+      console.error('Error adding audio chunk to queue:', error);
     }
+  }, []);
+
+  const playNextInQueue = useCallback(() => {
+    if (audioQueueRef.current.length === 0) {
+      isPlayingAudioRef.current = false;
+      return;
+    }
+    
+    isPlayingAudioRef.current = true;
+    const { audioUrl, audioBlob } = audioQueueRef.current.shift();
+    
+    const audio = new Audio(audioUrl);
+    
+    audio.play().catch(error => {
+      console.error('Error playing audio:', error);
+      // Continue with next in queue even if this one fails
+      playNextInQueue();
+    });
+    
+    // When this audio finishes, play the next one
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      playNextInQueue();
+    };
+    
+    // Also handle errors to continue queue
+    audio.onerror = () => {
+      console.error('Audio playback error');
+      URL.revokeObjectURL(audioUrl);
+      playNextInQueue();
+    };
   }, []);
 
   const clearAll = useCallback(() => {
@@ -209,6 +274,10 @@ const AudioRecorder = ({ onResponse }) => {
     setResponseText('');
     setCurrentAudio(null);
     setAudioChunks([]);
+    setFinalTranscript('');
+    // Clear audio queue
+    audioQueueRef.current = [];
+    isPlayingAudioRef.current = false;
   }, []);
 
   // Check browser support
