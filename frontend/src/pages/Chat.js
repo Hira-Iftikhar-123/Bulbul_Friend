@@ -1,25 +1,183 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { chatAPI } from '../services/api';
-import AudioRecorder from '../components/AudioRecorder';
 
 const Chat = () => {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState('arabic');
-  const [showVoiceChat, setShowVoiceChat] = useState(false);
+
+  const [showRealtimeChat, setShowRealtimeChat] = useState(false);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const audioContextRef = useRef(null);
+  const audioQueueRef = useRef([]);
+  const streamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+
+
+
+  const startRecording = async () => {
+    if (isStreaming) return;
+    audioQueueRef.current = [];
+    setResponse("");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      });
+      streamRef.current = stream;
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      }
+      if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        const float32 = e.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          let s = Math.max(-1, Math.min(1, float32[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        audioQueueRef.current.push(new Blob([int16.buffer], { type: 'audio/webm' }));
+      };
+
+      source.connect(processor);
+      processor.connect(audioContextRef.current.destination);
+
+      mediaRecorderRef.current = { source, processor };
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Recording setup failed:', error);
+      alert('Microphone access error: ' + error.message);
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.source.disconnect();
+      mediaRecorderRef.current.processor.disconnect();
+    }
+    setIsRecording(false);
+
+    const blob = new Blob(audioQueueRef.current, { type: 'audio/webm' });
+    audioQueueRef.current = [];
+
+    if (blob.size > 0) {
+      await startRealtimeConversation(blob);
+    }
+  };
+
+  const playPcmChunk = (pcmData) => {
+    const float32 = new Float32Array(pcmData.length);
+    for (let i = 0; i < pcmData.length; i++) {
+      float32[i] = pcmData[i] / 32768.0;
+    }
+    const audioBuffer = audioContextRef.current.createBuffer(1, float32.length, 16000);
+    audioBuffer.copyToChannel(float32, 0);
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContextRef.current.destination);
+    source.start();
+  };
+
+  const processStream = async (reader) => {
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        setIsStreaming(false);
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.substring(6);
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr);
+
+            if (event.type === "response.audio_transcript.delta") {
+              setResponse(prev => prev + event.delta);
+            } else if (event.type === "response.audio.delta") {
+              const audioData = atob(event.delta);
+              const pcmData = new Int16Array(audioData.length / 2);
+              for (let i = 0; i < audioData.length; i += 2) {
+                // Assuming little-endian 16-bit PCM
+                pcmData[i / 2] = (audioData.charCodeAt(i + 1) << 8) | audioData.charCodeAt(i);
+              }
+              playPcmChunk(pcmData);
+            } else if (event.type === "rate_limits.updated") {
+              console.log("Final chunk received");
+              setIsStreaming(false);
+            }
+          } catch (e) {
+            console.error("Failed to parse SSE event:", e, "line:", jsonStr);
+          }
+        }
+      }
+    }
+  };
+
+  const startRealtimeConversation = async (audioBlob) => {
+    setIsStreaming(true);
+    setResponse(""); // Clear previous response
+
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+
+    try {
+      const response = await fetch("http://localhost:8000/api/realtime-conversation", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      processStream(response.body.getReader());
+
+    } catch (error) {
+      console.error("Realtime conversation failed:", error);
+      setResponse("Error: Could not connect to the server.");
+      setIsStreaming(false);
+    }
+  };
+
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopRecording();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
 
   const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!message.trim()) return;
-
-    setIsLoading(true);
+    e?.preventDefault?.();
     try {
-      const result = await chatAPI.sendMessage(message, language);
-      setResponse(result.response);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setResponse('Sorry, there was an error processing your message.');
+      setIsLoading(true);
+      const res = await chatAPI.sendMessage(message, language);
+      setResponse(prev => prev + '\n' + (res?.response || ''));
     } finally {
       setIsLoading(false);
     }
@@ -54,10 +212,10 @@ const Chat = () => {
           
           <div className="flex gap-2">
             <button
-              onClick={() => setShowVoiceChat(!showVoiceChat)}
+              onClick={() => setShowRealtimeChat(!showRealtimeChat)}
               className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium"
             >
-              {showVoiceChat ? 'Hide Voice Chat' : 'Show Voice Chat'}
+              {showRealtimeChat ? 'Hide Voice Chat' : 'Show Voice Chat'}
             </button>
             
             <a
@@ -98,11 +256,27 @@ const Chat = () => {
           </div>
         )}
 
-        {showVoiceChat && (
-          <div className="card bg-white border-2 border-purple-200">
-            <AudioRecorder 
-              onResponse={(chunk) => console.log('Streaming TTS chunk received:', chunk)}
-            />
+        {showRealtimeChat && (
+          <div className="space-y-4">
+            <div className="card bg-white border-2 border-purple-200">
+              <h3 className="text-lg font-semibold mb-2">Real-time Voice Chat</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Click start and speak. Your voice will be sent to the backend for a real-time response.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    isRecording
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  } disabled:opacity-50`}
+                  disabled={isStreaming}
+                >
+                  {isRecording ? 'Stop Recording' : isStreaming ? 'Streaming...' : 'Start Recording'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
