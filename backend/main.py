@@ -22,7 +22,7 @@ import io
 import sys
 import json
 
-
+# Fix for Windows event loop
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -33,6 +33,10 @@ logging.basicConfig(
     force=True
 )
 
+# Environment-based configuration
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL", "")
+
 # Create FastAPI app
 app = FastAPI(
     title="Bulbul Friend API",
@@ -42,10 +46,20 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# CORS origins based on environment
+if ENVIRONMENT == "production":
+    cors_origins = [
+        "https://*.up.railway.app",
+        "https://*.railway.app",
+        RAILWAY_STATIC_URL
+    ] if RAILWAY_STATIC_URL else ["https://*.up.railway.app", "https://*.railway.app"]
+else:
+    cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],

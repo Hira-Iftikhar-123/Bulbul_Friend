@@ -1,0 +1,5 @@
+[build]
+path = "frontend"
+
+[start]
+cmd = "npm install && npm run build && npm run start"

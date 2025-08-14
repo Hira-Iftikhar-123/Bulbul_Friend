@@ -1,8 +1,11 @@
 import axios from 'axios';
 
+// Get API URL from environment or use default
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 // Create axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -156,7 +159,7 @@ export const streamingTTSAPI = {
     formData.append('transcript',transcript );
     
     try {
-      const response = await fetch('http://localhost:8000/api/streaming-tts-fixed', {
+      const response = await fetch(`${API_BASE_URL}/api/streaming-tts-fixed`, {
         method: 'POST',
         body: formData,
       });
@@ -196,7 +199,7 @@ export const streamingTTSAPI = {
 
   processTranscript: async (transcript, language = 'arabic', onChunk) => {
     try {
-      const response = await fetch('http://localhost:8000/api/streaming-tts-transcript', {
+      const response = await fetch(`${API_BASE_URL}/api/streaming-tts-transcript`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
