@@ -13,3 +13,4 @@ soundfile
 httpx
 python-jose[cryptography]
 passlib[bcrypt]
+openai
