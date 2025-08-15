@@ -30,7 +30,7 @@ const Chat = () => {
       streamRef.current = stream;
 
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext);
       }
       if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
 

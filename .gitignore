@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+<<<<<<< Updated upstream
 __pycache__/
 *.py[cod]
 *$py.class
@@ -128,3 +129,8 @@ temp/
 backend/build/
 frontend/build/
 frontend/dist/
+=======
+.env
+__pycache__/
+venv/
+>>>>>>> Stashed changes

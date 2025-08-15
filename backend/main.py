@@ -262,8 +262,13 @@ async def streaming_tts_transcript_endpoint(
 @app.post("/api/realtime-conversation")
 async def realtime_conversation(file: UploadFile):
     audio_bytes = await file.read()
+    
+    async def streamer():
+        async for chunk in openai_realtime_stream(audio_bytes):
+            yield chunk
+    
     return StreamingResponse(
-        openai_realtime_stream(audio_bytes),
+        streamer(),
         media_type="text/event-stream"
     )
 
