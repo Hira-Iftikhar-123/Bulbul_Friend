@@ -21,6 +21,10 @@ from starlette.websockets import WebSocketDisconnect
 import io
 import sys
 import json
+from fastapi import Header, HTTPException, Request
+import hmac
+import hashlib
+import os
 
 # Fix for Windows event loop
 if sys.platform.startswith("win"):
@@ -272,12 +276,42 @@ async def realtime_conversation(file: UploadFile):
         media_type="text/event-stream"
     )
 
+GITHUB_SECRET = os.getenv("GITHUB_SECRET", "your_default_secret_here")  # Put your real secret in env vars
 
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+@app.post("/github-webhook")
+async def github_webhook(
+    request: Request,
+    x_github_event: str = Header(None),
+    x_hub_signature_256: str = Header(None)
+):
+    body = await request.body()
+
+    # Verify GitHub signature
+    if not verify_signature(body, x_hub_signature_256):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    payload = await request.json()
+
+    if x_github_event == "push":
+        pusher = payload.get("pusher", {}).get("name")
+        repo = payload.get("repository", {}).get("full_name")
+        commit_message = payload.get("head_commit", {}).get("message")
+
+        print(f"Received GitHub push event!")
+        print(f"Pushed by: {pusher}")
+        print(f"Repository: {repo}")
+        print(f"Commit message: {commit_message}")
+
+        # Add your custom logic here, e.g., trigger CI/CD or notify a service
+
+    return {"message": "Webhook received"}
+
+
+def verify_signature(payload_body: bytes, signature_header: str) -> bool:
+    if signature_header is None:
+        return False
+    sha_name, signature = signature_header.split('=')
+    if sha_name != 'sha256':
+        return False
+    mac = hmac.new(GITHUB_SECRET.encode(), msg=payload_body, digestmod=hashlib.sha256)
+    return hmac.compare_digest(mac.hexdigest(), signature)

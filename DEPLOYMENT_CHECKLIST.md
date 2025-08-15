@@ -38,9 +38,6 @@
    ENVIRONMENT=production
    PORT=8000
    OPENAI_API_KEY=your_actual_openai_key
-   GOOGLE_API_KEY=your_actual_google_key
-   GEMINI_API_KEY=your_actual_gemini_key
-   SECRET_KEY=your_secret_key_here
    ```
 
 5. **Deploy Backend**
