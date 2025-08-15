@@ -28,14 +28,21 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['.js', '.jsx']
+    extensions: ['.js', '.jsx'],
+    fallback: {
+      "process": require.resolve("process/browser")
+    }
   },
   plugins: [
     new HtmlWebpackPlugin({
       template: './public/index.html'
     }),
     new webpack.DefinePlugin({
-      'process.env': JSON.stringify(process.env)
+      'process.env': JSON.stringify(process.env),
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+    }),
+    new webpack.ProvidePlugin({
+      process: 'process/browser'
     })
   ],
   devServer: {
