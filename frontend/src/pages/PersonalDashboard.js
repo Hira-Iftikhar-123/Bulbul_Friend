@@ -307,8 +307,8 @@ const PersonalDashboard = () => {
       formData.append('audio', audioBlob, 'recording.webm')
 
       const endpoint = selectedProvider === 'openai'
-        ? 'http://localhost:8000/api/openai'
-        : 'http://localhost:8000/api/gemini-process'; 
+        ? `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/openai`
+        : `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/gemini-process`; 
 
       const response = await fetch(endpoint, {
         method: 'POST',

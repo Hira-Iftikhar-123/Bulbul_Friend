@@ -6,7 +6,6 @@ README.md
 .env
 .railwayignore
 railway.json
-webpack.config.js
 .cache
 .webpack-cache
 build

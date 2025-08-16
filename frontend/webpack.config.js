@@ -52,7 +52,7 @@ module.exports = {
     hot: true,
     historyApiFallback: true,
     proxy: {
-      '/api': 'http://localhost:8000'
+      '/api': process.env.REACT_APP_API_URL || 'http://localhost:8000'
     }
   }
 };

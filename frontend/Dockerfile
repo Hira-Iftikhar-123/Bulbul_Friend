@@ -7,15 +7,20 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Clear npm cache and install dependencies
-RUN npm cache clean --force && \
-    npm ci --omit=dev --no-optional
+# Install webpack-cli globally to avoid interactive prompts
+RUN npm install -g webpack-cli
+
+# Install all dependencies (including dev dependencies needed for build)
+RUN npm ci
 
 # Copy source code
 COPY . .
 
 # Build the application
 RUN npm run build
+
+# Remove dev dependencies to reduce image size
+RUN npm prune --omit=dev
 
 # Install serve globally
 RUN npm install -g serve
