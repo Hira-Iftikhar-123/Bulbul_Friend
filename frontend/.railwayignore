@@ -1,6 +1,10 @@
-# Docker files (we're using NIXPACKS)
+# Force NIXPACKS by excluding all Docker files
 Dockerfile*
 .dockerignore
+docker-compose*
+.docker/
+
+# Nginx (not needed with NIXPACKS)
 nginx.conf
 
 # Development files
@@ -23,3 +27,7 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Cache directories
+cache/
+.npm/
