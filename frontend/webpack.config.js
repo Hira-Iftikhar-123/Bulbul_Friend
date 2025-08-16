@@ -9,6 +9,10 @@ module.exports = {
     filename: 'bundle.js',
     publicPath: '/'
   },
+  cache: {
+  type: 'filesystem',
+  cacheDirectory: path.resolve(__dirname, 'build-cache')
+  },
   module: {
     rules: [
       {
