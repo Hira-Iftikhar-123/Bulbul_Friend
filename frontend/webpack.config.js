@@ -1,6 +1,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack'); 
+const Dotenv = require('dotenv-webpack');
 
 module.exports = {
   entry: './src/index.js',
@@ -10,8 +11,8 @@ module.exports = {
     publicPath: '/'
   },
   cache: {
-  type: 'filesystem',
-  cacheDirectory: path.resolve(__dirname, 'cache')
+    type: 'filesystem',
+    cacheDirectory: path.resolve(__dirname, 'cache')
   },
   module: {
     rules: [
@@ -38,8 +39,9 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './public/index.html'
     }),
+    new Dotenv(), 
     new webpack.DefinePlugin({
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+      'process.env.NODE_ENV': JSON.stringify('production') 
     })
   ],
   devServer: {
@@ -53,4 +55,4 @@ module.exports = {
       '/api': 'http://localhost:8000'
     }
   }
-}; 
+};
