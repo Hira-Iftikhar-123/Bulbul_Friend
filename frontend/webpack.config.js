@@ -11,9 +11,9 @@ module.exports = {
     publicPath: '/'
   },
   cache: {
-    type: 'filesystem',
-    cacheDirectory: path.resolve(__dirname, 'cache')
-  },
+  type: 'filesystem',
+  cacheDirectory: path.resolve(__dirname, '.webpack-cache')
+},
   module: {
     rules: [
       {
