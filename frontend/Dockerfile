@@ -1,5 +1,5 @@
-# Use Node.js 18 Alpine for smaller image size
-FROM node:18-alpine
+# Build stage
+FROM node:18-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -7,11 +7,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install webpack-cli globally to avoid interactive prompts
-RUN npm install -g webpack-cli
-
-# Install all dependencies (including dev dependencies needed for build)
-RUN npm ci
+# Install all dependencies (including dev dependencies)
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -19,11 +16,17 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Remove dev dependencies to reduce image size
-RUN npm prune --omit=dev
+# Production stage
+FROM node:18-alpine AS production
+
+# Set working directory
+WORKDIR /app
 
 # Install serve globally
 RUN npm install -g serve
+
+# Copy built application from builder stage
+COPY --from=builder /app/build ./build
 
 # Expose port
 EXPOSE 3000
