@@ -1,0 +1,7 @@
+node_modules/
+.cache/
+.webpack-cache/
+build/
+.env
+*.log
+.DS_Store
