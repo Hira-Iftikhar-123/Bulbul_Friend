@@ -5,7 +5,7 @@ const Chat = () => {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [language, setLanguage] = useState('arabic');
+  const [language, setLanguage] = useState('english');
 
   const [showRealtimeChat, setShowRealtimeChat] = useState(false);
 
