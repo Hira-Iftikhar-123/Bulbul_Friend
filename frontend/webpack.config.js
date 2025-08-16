@@ -11,7 +11,7 @@ module.exports = {
   },
   cache: {
   type: 'filesystem',
-  cacheDirectory: path.resolve(__dirname, 'build-cache')
+  cacheDirectory: path.resolve(__dirname, 'cache')
   },
   module: {
     rules: [
