@@ -3,17 +3,14 @@ import axios from 'axios';
 // API base URL - use environment variable or fallback to production backend
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app';
 
-// Create axios instance with CORS configuration
+// Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    'Content-Type': 'application/json'
   },
-  withCredentials: false, // Disable credentials for CORS
-  timeout: 30000 // 30 second timeout
+  withCredentials: false,
+  timeout: 30000
 });
 
 // Request interceptor to add auth token
@@ -23,50 +20,21 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // Log request for debugging
-    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-      headers: config.headers,
-      data: config.data
-    });
-    
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => {
-    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Response Error:', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      url: error.config?.url,
-      message: error.message,
-      response: error.response?.data
-    });
-
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
-    
-    // Handle CORS errors specifically
-    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
-      console.error('CORS or Network Error detected. This usually means:');
-      console.error('1. The backend server is not running');
-      console.error('2. CORS is not properly configured on the backend');
-      console.error('3. The API endpoint does not exist');
-      console.error('4. Network connectivity issues');
-    }
-    
     return Promise.reject(error);
   }
 );
@@ -192,65 +160,11 @@ export const chatAPI = {
     const realtimeApi = axios.create({
       baseURL: API_BASE_URL,
       headers: { 
-        'Content-Type': 'multipart/form-data',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        'Content-Type': 'multipart/form-data'
       },
       withCredentials: false,
-      timeout: 60000 // 60 second timeout for audio processing
+      timeout: 60000
     });
-
-    // Add request interceptor for debugging
-    realtimeApi.interceptors.request.use(
-      (config) => {
-        console.log('Realtime API Request:', {
-          method: config.method,
-          url: config.url,
-          headers: config.headers,
-          dataType: config.data instanceof FormData ? 'FormData' : typeof config.data
-        });
-        return config;
-      },
-      (error) => {
-        console.error('Realtime API Request Error:', error);
-        return Promise.reject(error);
-      }
-    );
-
-    // Add response interceptor for debugging
-    realtimeApi.interceptors.response.use(
-      (response) => {
-        console.log('Realtime API Response:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: response.data
-        });
-        return response;
-      },
-      (error) => {
-        console.error('Realtime API Response Error:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          message: error.message,
-          code: error.code,
-          response: error.response?.data
-        });
-
-        // Provide specific error messages for common issues
-        if (error.response?.status === 405) {
-          console.error('Method Not Allowed: The backend endpoint does not support POST requests');
-        } else if (error.response?.status === 404) {
-          console.error('Endpoint Not Found: The /api/realtime-conversation endpoint does not exist');
-        } else if (error.message === 'Network Error') {
-          console.error('CORS Error: The backend is not allowing requests from this origin');
-          console.error('Frontend Origin:', window.location.origin);
-          console.error('Backend URL:', API_BASE_URL);
-        }
-
-        return Promise.reject(error);
-      }
-    );
 
     return realtimeApi.post('/api/realtime-conversation', formData);
   },
@@ -260,7 +174,7 @@ export const chatAPI = {
 export const streamingTTSAPI = {
   processAudio: async (transcript, onChunk) => {
     const formData = new FormData();
-    formData.append('transcript',transcript );
+    formData.append('transcript', transcript);
     
     try {
       const response = await fetch(`${API_BASE_URL}/api/streaming-tts-fixed`, {
@@ -282,7 +196,7 @@ export const streamingTTSAPI = {
         
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        buffer = lines.pop() || '';
         
         for (const line of lines) {
           if (line.trim()) {
@@ -290,13 +204,12 @@ export const streamingTTSAPI = {
               const chunk = JSON.parse(line);
               onChunk(chunk);
             } catch (e) {
-              console.warn('Failed to parse JSON chunk:', line);
+              // Silent fail for malformed JSON
             }
           }
         }
       }
     } catch (error) {
-      console.error('Streaming TTS error:', error);
       throw error;
     }
   },
@@ -328,7 +241,7 @@ export const streamingTTSAPI = {
         
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        buffer = lines.pop() || '';
         
         for (const line of lines) {
           if (line.trim()) {
@@ -336,13 +249,12 @@ export const streamingTTSAPI = {
               const chunk = JSON.parse(line);
               onChunk(chunk);
             } catch (e) {
-              console.warn('Failed to parse JSON chunk:', line);
+              // Silent fail for malformed JSON
             }
           }
         }
       }
     } catch (error) {
-      console.error('Streaming TTS transcript error:', error);
       throw error;
     }
   },

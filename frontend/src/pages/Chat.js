@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { chatAPI } from '../services/api';
-import CorsTest from '../components/CorsTest';
 
 const Chat = () => {
   const [message, setMessage] = useState('');
@@ -160,11 +159,6 @@ const Chat = () => {
               Full TTS Test
             </a>
           </div>
-        </div>
-
-        {/* Add CORS Test Component */}
-        <div className="mb-6">
-          <CorsTest />
         </div>
 
         <form onSubmit={sendMessage} className="mb-6">

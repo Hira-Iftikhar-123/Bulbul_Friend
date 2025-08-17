@@ -67,25 +67,7 @@ module.exports = (env, argv) => {
       historyApiFallback: true,
       proxy: {
         '/api': process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'
-      },
-      // Add error handling for URI issues
-      onErrors: (compiler) => {
-        compiler.hooks.failed.tap('WebpackDevServer', (error) => {
-          console.error('Webpack compilation failed:', error.message);
-        });
-      },
-      // Better error handling
-      client: {
-        overlay: {
-          errors: true,
-          warnings: false,
-        },
-      },
-    },
-    // Add better error handling
-    stats: {
-      errorDetails: true,
-      children: false,
-    },
+      }
+    }
   };
 };
