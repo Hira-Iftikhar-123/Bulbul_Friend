@@ -55,7 +55,7 @@ module.exports = (env, argv) => {
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(argv.mode || 'development'),
-        'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || 'http://localhost:8000')
+        'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app')
       })
     ],
     devServer: {
@@ -66,7 +66,7 @@ module.exports = (env, argv) => {
       hot: true,
       historyApiFallback: true,
       proxy: {
-        '/api': process.env.REACT_APP_API_URL || 'http://localhost:8000'
+        '/api': process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'
       }
     }
   };

@@ -143,7 +143,7 @@ const Chat = () => {
     formData.append("file", audioBlob, "recording.webm");
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/realtime-conversation`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'}/api/realtime-conversation`, {
         method: "POST",
         body: formData,
       });

@@ -138,7 +138,7 @@ const AudioRecorder = ({ onResponse }) => {
       const formData = new FormData();
       formData.append('audio', audioFile);
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/openai`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'}/api/openai`, {
         method: 'POST',
         body: formData,
         signal: AbortSignal.timeout(30000),

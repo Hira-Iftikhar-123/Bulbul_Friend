@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// API base URL - use environment variable or fallback to localhost
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// API base URL - use environment variable or fallback to production backend
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app';
 
 // Create axios instance
 const api = axios.create({
