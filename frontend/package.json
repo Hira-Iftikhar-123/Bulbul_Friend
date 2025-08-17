@@ -24,7 +24,7 @@
     "build-prod": "npx webpack --mode production",
     "serve": "npx serve -s build -l 3000",
     "railway-build": "npm install --production=false --no-audit --no-fund && npm run build",
-    "docker-build": "npx webpack --mode production"
+    "docker-build": "./node_modules/.bin/webpack --mode production"
   },
   "devDependencies": {
     "@babel/core": "^7.22.0",

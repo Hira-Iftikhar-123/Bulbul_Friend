@@ -5,17 +5,14 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install webpack-cli globally to avoid permission issues
-RUN npm install -g webpack-cli
-
-# Install dependencies
+# Install dependencies first
 RUN npm install
 
 # Copy source code
 COPY . .
 
-# Build the application using webpack directly
-RUN webpack --mode production
+# Build the application using the docker-build script
+RUN npm run docker-build
 
 # Install serve globally
 RUN npm install -g serve
