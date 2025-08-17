@@ -5,13 +5,14 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
+  const publicUrl = process.env.PUBLIC_URL || '';
   
   return {
     entry: './src/index.js',
     output: {
       path: path.resolve(__dirname, 'build'),
       filename: 'bundle.js',
-      publicPath: '/'
+      publicPath: publicUrl + '/'
     },
     cache: {
       type: 'filesystem',
@@ -40,7 +41,10 @@ module.exports = (env, argv) => {
     },
     plugins: [
       new HtmlWebpackPlugin({
-        template: './public/index.html'
+        template: './public/index.html',
+        templateParameters: {
+          PUBLIC_URL: publicUrl
+        }
       }),
       new CopyWebpackPlugin({
         patterns: [
@@ -55,7 +59,8 @@ module.exports = (env, argv) => {
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(argv.mode || 'development'),
-        'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app')
+        'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'),
+        'process.env.PUBLIC_URL': JSON.stringify(publicUrl)
       })
     ],
     devServer: {

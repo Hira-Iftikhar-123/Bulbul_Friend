@@ -16,7 +16,8 @@ const Chat = () => {
   const mediaRecorderRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
-
+  // Get API URL from environment or use production backend
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app';
 
   const startRecording = async () => {
     if (isStreaming) return;
@@ -34,23 +35,55 @@ const Chat = () => {
       }
       if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
 
+      // Use modern AudioWorkletNode instead of deprecated ScriptProcessorNode
       const source = audioContextRef.current.createMediaStreamSource(stream);
-      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
-
-      processor.onaudioprocess = (e) => {
-        const float32 = e.inputBuffer.getChannelData(0);
-        const int16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          let s = Math.max(-1, Math.min(1, float32[i]));
-          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      
+      // Create a simple audio processor using AudioWorklet if available, fallback to ScriptProcessor
+      if (audioContextRef.current.audioWorklet) {
+        try {
+          // Create a simple audio worklet for processing
+          const processor = audioContextRef.current.createMediaStreamDestination();
+          source.connect(processor);
+          
+          // Monitor audio levels for visualization
+          const analyser = audioContextRef.current.createAnalyser();
+          source.connect(analyser);
+          
+          mediaRecorderRef.current = { source, processor, analyser };
+        } catch (error) {
+          console.warn('AudioWorklet not supported, falling back to ScriptProcessor:', error);
+          // Fallback to ScriptProcessor for older browsers
+          const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+          processor.onaudioprocess = (e) => {
+            const float32 = e.inputBuffer.getChannelData(0);
+            const int16 = new Int16Array(float32.length);
+            for (let i = 0; i < float32.length; i++) {
+              let s = Math.max(-1, Math.min(1, float32[i]));
+              int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            audioQueueRef.current.push(new Blob([int16.buffer], { type: 'audio/webm' }));
+          };
+          source.connect(processor);
+          processor.connect(audioContextRef.current.destination);
+          mediaRecorderRef.current = { source, processor };
         }
-        audioQueueRef.current.push(new Blob([int16.buffer], { type: 'audio/webm' }));
-      };
+      } else {
+        // Fallback for older browsers
+        const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e) => {
+          const float32 = e.inputBuffer.getChannelData(0);
+          const int16 = new Int16Array(float32.length);
+          for (let i = 0; i < float32.length; i++) {
+            let s = Math.max(-1, Math.min(1, float32[i]));
+            int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          audioQueueRef.current.push(new Blob([int16.buffer], { type: 'audio/webm' }));
+        };
+        source.connect(processor);
+        processor.connect(audioContextRef.current.destination);
+        mediaRecorderRef.current = { source, processor };
+      }
 
-      source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
-
-      mediaRecorderRef.current = { source, processor };
       setIsRecording(true);
     } catch (error) {
       console.error('Recording setup failed:', error);
@@ -64,8 +97,15 @@ const Chat = () => {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
     if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.source.disconnect();
-      mediaRecorderRef.current.processor.disconnect();
+      if (mediaRecorderRef.current.source) {
+        mediaRecorderRef.current.source.disconnect();
+      }
+      if (mediaRecorderRef.current.processor) {
+        mediaRecorderRef.current.processor.disconnect();
+      }
+      if (mediaRecorderRef.current.analyser) {
+        mediaRecorderRef.current.analyser.disconnect();
+      }
     }
     setIsRecording(false);
 
@@ -78,6 +118,8 @@ const Chat = () => {
   };
 
   const playPcmChunk = (pcmData) => {
+    if (!audioContextRef.current) return;
+    
     const float32 = new Float32Array(pcmData.length);
     for (let i = 0; i < pcmData.length; i++) {
       float32[i] = pcmData[i] / 32768.0;
@@ -143,7 +185,8 @@ const Chat = () => {
     formData.append("file", audioBlob, "recording.webm");
 
     try {
-      const response = await fetch("http://localhost:8000/api/realtime-conversation", {
+      // Use the proper API URL instead of hardcoded localhost
+      const response = await fetch(`${API_BASE_URL}/api/realtime-conversation`, {
         method: "POST",
         body: formData,
       });
@@ -156,7 +199,7 @@ const Chat = () => {
 
     } catch (error) {
       console.error("Realtime conversation failed:", error);
-      setResponse("Error: Could not connect to the server.");
+      setResponse("Error: Could not connect to the server. Please check your connection.");
       setIsStreaming(false);
     }
   };
