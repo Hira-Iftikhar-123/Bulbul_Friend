@@ -2,10 +2,14 @@
 nixPkgs = ["nodejs", "npm"]
 
 [phases.install]
-cmds = ["npm install --no-audit --no-fund"]
+cmds = ["npm install --no-audit --no-fund --no-optional"]
 
 [phases.build]
-cmds = ["npx webpack --mode production"]
+cmds = ["npm install --only=dev", "npx webpack --mode production"]
 
 [start]
 cmd = "npx serve -s build -l $PORT"
+
+[variables]
+NIXPACKS_NODE_VERSION = "18"
+NIXPACKS_NPM_VERSION = "latest"
