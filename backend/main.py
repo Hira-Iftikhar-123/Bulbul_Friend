@@ -2,7 +2,7 @@ import asyncio
 import logging
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from GeminiLLM import query_gemini
+# from GeminiLLM import query_gemini
 from pydantic import BaseModel
 from models import ChatRequest, ChatResponse
 from typing import Optional
@@ -13,7 +13,7 @@ import os
 from openai_realtime import openai_realtime_stream
 import subprocess
 from openai_test import process_audio_with_llm
-from gemini_test import gemini_response
+# from gemini_test import gemini_response
 from fastapi.responses import Response, StreamingResponse
 from openai_stream import OpenAIAudio
 from openai_streaming_tts_fixed import process_audio_with_streaming_tts_fixed, process_transcript_with_streaming_tts_fixed
@@ -101,17 +101,9 @@ async def chat_with_bulbul(request: ChatRequest):
     """
     Basic chat endpoint with Bulbul AI
     """
-    # Simple response for now - will be replaced with actual LLM integration
-    if request.language == "arabic":
-        response = query_gemini(request, user_histories)
-    else:
-        response = query_gemini(request,user_histories)
-    
-    if response.response!="error":
-        user_histories.append({"role":"user", "parts":[request.message]})
-        user_histories.append({"role":"model", "parts":[response.response]})
+    # Temporarily disabled for OpenAI testing
     return ChatResponse(
-        response=response.response,
+        response="Chat endpoint temporarily disabled for OpenAI testing",
         language=request.language,
         timestamp=datetime.now().isoformat()
     )
@@ -157,29 +149,29 @@ def convert_webm_to_mp3_bytes(webm_bytes: bytes) -> bytes:
     return mp3_bytes
 
 
-@app.post("/api/gemini-process")
-async def getresponse_gemini(
-    audio: UploadFile = File(...)
-):
-    try:
-        audio_bytes = await audio.read()
-        mp3_bytes = convert_webm_to_mp3_bytes(audio_bytes)
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
-            tmp.write(mp3_bytes)
-            tmp_path = tmp.name
+# @app.post("/api/gemini-process")
+# async def getresponse_gemini(
+#     audio: UploadFile = File(...)
+# ):
+#     try:
+#         audio_bytes = await audio.read()
+#         mp3_bytes = convert_webm_to_mp3_bytes(audio_bytes)
+#         
+#         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
+#             tmp.write(mp3_bytes)
+#             tmp_path = tmp.name
 
-        async def streamer():
-            try:
-                async for chunk in gemini_response(tmp_path):
-                    yield chunk
-            finally:
-                os.unlink(tmp_path)
+#         async def streamer():
+#             try:
+#                 async for chunk in gemini_response(tmp_path):
+#                     yield chunk
+#             finally:
+#                 os.unlink(tmp_path)
 
-        return StreamingResponse(streamer(), media_type="application/json")
+#         return StreamingResponse(streamer(), media_type="application/json")
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.websocket("/ws/openai")
 async def openaipipe(websocket: WebSocket):
@@ -200,7 +192,7 @@ async def openaipipe(websocket: WebSocket):
             audio_file.name = "recording.webm"
             
             # Transcribe the entire audio received up to this point
-            transcript = await OpenAIAudio(audio_file)
+            transcript = await OpenAIAudio(io.BytesIO(full_audio_bytes))
             
             # Send the latest transcript back to the client
             await websocket.send_text(transcript)

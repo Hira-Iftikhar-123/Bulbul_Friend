@@ -30,14 +30,14 @@ def query_gemini(prompt: ChatRequest, history: list[dict]) -> ChatResponse:
         return ChatResponse(
             response=processed_response,
             language=prompt.language,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now().isoformat()
         )
     except Exception as e:
         print(history)
         return ChatResponse(
             response=f"error {e}",
             language=prompt.language,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now().isoformat()
         )
 
 # if __name__ == "__main__":

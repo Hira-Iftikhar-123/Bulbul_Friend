@@ -7,7 +7,7 @@ from fastapi import FastAPI, UploadFile
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 
-load_dotenv("backend/.env.local")
+load_dotenv(".env.local")
 API_KEY = os.getenv("OPENAI_API_KEY")
 WS_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2025-06-03"
 
