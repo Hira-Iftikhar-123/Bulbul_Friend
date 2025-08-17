@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 from openai.types.chat import ChatCompletionMessageParam
 
-load_dotenv('.env')
+load_dotenv('.env.local')
 apikey = os.getenv('OPENAI_API_KEY')
 
 async def stream_gpt4o_response_fixed(transcript: str) -> AsyncGenerator[dict, None]:
