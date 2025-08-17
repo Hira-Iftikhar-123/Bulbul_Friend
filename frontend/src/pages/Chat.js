@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { chatAPI } from '../services/api';
+import CorsTest from '../components/CorsTest';
 
 const Chat = () => {
   const [message, setMessage] = useState('');
@@ -11,16 +12,14 @@ const Chat = () => {
 
   const [isRecording, setIsRecording] = useState(false);
   const audioContextRef = useRef(null);
-  const audioQueueRef = useRef([]);
+  const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
-
-
   const startRecording = async () => {
     if (isStreaming) return;
-    audioQueueRef.current = [];
+    audioChunksRef.current = [];
     setResponse("");
 
     try {
@@ -30,27 +29,23 @@ const Chat = () => {
       streamRef.current = stream;
 
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext);
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
       if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
 
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+      // Use MediaRecorder instead of deprecated ScriptProcessor
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
 
-      processor.onaudioprocess = (e) => {
-        const float32 = e.inputBuffer.getChannelData(0);
-        const int16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          let s = Math.max(-1, Math.min(1, float32[i]));
-          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
-        audioQueueRef.current.push(new Blob([int16.buffer], { type: 'audio/webm' }));
       };
 
-      source.connect(processor);
-      processor.connect(audioContextRef.current.destination);
-
-      mediaRecorderRef.current = { source, processor };
+      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
     } catch (error) {
       console.error('Recording setup failed:', error);
@@ -60,79 +55,23 @@ const Chat = () => {
   };
 
   const stopRecording = async () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.source.disconnect();
-      mediaRecorderRef.current.processor.disconnect();
-    }
     setIsRecording(false);
 
-    const blob = new Blob(audioQueueRef.current, { type: 'audio/webm' });
-    audioQueueRef.current = [];
+    // Wait for the final data to be available
+    setTimeout(async () => {
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      audioChunksRef.current = [];
 
-    if (blob.size > 0) {
-      await startRealtimeConversation(blob);
-    }
-  };
-
-  const playPcmChunk = (pcmData) => {
-    const float32 = new Float32Array(pcmData.length);
-    for (let i = 0; i < pcmData.length; i++) {
-      float32[i] = pcmData[i] / 32768.0;
-    }
-    const audioBuffer = audioContextRef.current.createBuffer(1, float32.length, 16000);
-    audioBuffer.copyToChannel(float32, 0);
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContextRef.current.destination);
-    source.start();
-  };
-
-  const processStream = async (reader) => {
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        setIsStreaming(false);
-        break;
+      if (blob.size > 0) {
+        await startRealtimeConversation(blob);
       }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop(); // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const jsonStr = line.substring(6);
-          if (!jsonStr) continue;
-
-          try {
-            const event = JSON.parse(jsonStr);
-
-            if (event.type === "response.audio_transcript.delta") {
-              setResponse(prev => prev + event.delta);
-            } else if (event.type === "response.audio.delta") {
-              const audioData = atob(event.delta);
-              const pcmData = new Int16Array(audioData.length / 2);
-              for (let i = 0; i < audioData.length; i += 2) {
-                // Assuming little-endian 16-bit PCM
-                pcmData[i / 2] = (audioData.charCodeAt(i + 1) << 8) | audioData.charCodeAt(i);
-              }
-              playPcmChunk(pcmData);
-            } else if (event.type === "rate_limits.updated") {
-              console.log("Final chunk received");
-              setIsStreaming(false);
-            }
-          } catch (e) {
-            console.error("Failed to parse SSE event:", e, "line:", jsonStr);
-          }
-        }
-      }
-    }
+    }, 100);
   };
 
   const startRealtimeConversation = async (audioBlob) => {
@@ -143,24 +82,20 @@ const Chat = () => {
     formData.append("file", audioBlob, "recording.webm");
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'}/api/realtime-conversation`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Use the API service instead of direct fetch
+      const response = await chatAPI.realtimeConversation(formData);
+      
+      if (response && response.data) {
+        // Handle the response data
+        setResponse(response.data);
       }
-
-      processStream(response.body.getReader());
-
     } catch (error) {
       console.error("Realtime conversation failed:", error);
       setResponse("Error: Could not connect to the server.");
+    } finally {
       setIsStreaming(false);
     }
   };
-
 
   // Cleanup on unmount
   useEffect(() => {
@@ -225,6 +160,11 @@ const Chat = () => {
               Full TTS Test
             </a>
           </div>
+        </div>
+
+        {/* Add CORS Test Component */}
+        <div className="mb-6">
+          <CorsTest />
         </div>
 
         <form onSubmit={sendMessage} className="mb-6">

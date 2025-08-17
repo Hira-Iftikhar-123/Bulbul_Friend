@@ -3,10 +3,17 @@ import axios from 'axios';
 // API base URL - use environment variable or fallback to production backend
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app';
 
-// Create axios instance
+// Create axios instance with CORS configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  },
+  withCredentials: false, // Disable credentials for CORS
+  timeout: 30000 // 30 second timeout
 });
 
 // Request interceptor to add auth token
@@ -16,21 +23,50 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Log request for debugging
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+      headers: config.headers,
+      data: config.data
+    });
+    
     return config;
   },
   (error) => {
+    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
+    return response;
+  },
   (error) => {
+    console.error('API Response Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      message: error.message,
+      response: error.response?.data
+    });
+
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
+    
+    // Handle CORS errors specifically
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.error('CORS or Network Error detected. This usually means:');
+      console.error('1. The backend server is not running');
+      console.error('2. CORS is not properly configured on the backend');
+      console.error('3. The API endpoint does not exist');
+      console.error('4. Network connectivity issues');
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -142,13 +178,81 @@ export const speechAPI = {
   },
 };
 
-// Chat API
+// Chat API with realtime conversation support
 export const chatAPI = {
   sendMessage: (message, language = 'arabic') => {
     return api.post('/api/chat', {
       message,
       language,
     }).then(res => res.data);
+  },
+
+  realtimeConversation: (formData) => {
+    // Create a new axios instance for multipart form data
+    const realtimeApi = axios.create({
+      baseURL: API_BASE_URL,
+      headers: { 
+        'Content-Type': 'multipart/form-data',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      },
+      withCredentials: false,
+      timeout: 60000 // 60 second timeout for audio processing
+    });
+
+    // Add request interceptor for debugging
+    realtimeApi.interceptors.request.use(
+      (config) => {
+        console.log('Realtime API Request:', {
+          method: config.method,
+          url: config.url,
+          headers: config.headers,
+          dataType: config.data instanceof FormData ? 'FormData' : typeof config.data
+        });
+        return config;
+      },
+      (error) => {
+        console.error('Realtime API Request Error:', error);
+        return Promise.reject(error);
+      }
+    );
+
+    // Add response interceptor for debugging
+    realtimeApi.interceptors.response.use(
+      (response) => {
+        console.log('Realtime API Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        });
+        return response;
+      },
+      (error) => {
+        console.error('Realtime API Response Error:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          message: error.message,
+          code: error.code,
+          response: error.response?.data
+        });
+
+        // Provide specific error messages for common issues
+        if (error.response?.status === 405) {
+          console.error('Method Not Allowed: The backend endpoint does not support POST requests');
+        } else if (error.response?.status === 404) {
+          console.error('Endpoint Not Found: The /api/realtime-conversation endpoint does not exist');
+        } else if (error.message === 'Network Error') {
+          console.error('CORS Error: The backend is not allowing requests from this origin');
+          console.error('Frontend Origin:', window.location.origin);
+          console.error('Backend URL:', API_BASE_URL);
+        }
+
+        return Promise.reject(error);
+      }
+    );
+
+    return realtimeApi.post('/api/realtime-conversation', formData);
   },
 };
 
