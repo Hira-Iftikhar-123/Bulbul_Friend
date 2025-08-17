@@ -13,3 +13,5 @@ cmd = "npx serve -s build -l $PORT"
 [variables]
 NIXPACKS_NODE_VERSION = "18"
 NIXPACKS_NPM_VERSION = "latest"
+NIXPACKS_SKIP_DETECT = "true"
+NIXPACKS_FORCE_OVERRIDE = "true"
