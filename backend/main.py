@@ -50,26 +50,31 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS origins based on environment
 if ENVIRONMENT == "production":
     cors_origins = [
-        "https://*.up.railway.app",
-        "https://*.railway.app",
+        "https://bubulfriend-frontend.up.railway.app",
+        "https://bulbulfriend-frontend.railway.app",
         RAILWAY_STATIC_URL
-    ] if RAILWAY_STATIC_URL else ["https://*.up.railway.app", "https://*.railway.app"]
+    ] if RAILWAY_STATIC_URL else [
+        "https://bubulfriend-frontend.up.railway.app",
+        "https://bulbulfriend-frontend.railway.app"
+    ]
 else:
-    cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    cors_origins = [
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080"
+    ]
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_credentials=False,  
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-
 
 # Health check endpoint
 @app.get("/")
