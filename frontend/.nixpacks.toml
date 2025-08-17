@@ -2,10 +2,10 @@
 nixPkgs = ["nodejs", "npm"]
 
 [phases.install]
-cmds = ["npm install --production=false --no-audit --no-fund"]
+cmds = ["npm install --omit=dev --no-audit --no-fund"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["npm install --only=dev", "npm run build"]
 
 [start]
 cmd = "npx serve -s build -l $PORT"
