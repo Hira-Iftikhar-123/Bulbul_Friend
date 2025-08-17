@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:18 
 
 WORKDIR /app
 
@@ -11,8 +11,11 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the application using the docker-build script
-RUN npm run docker-build
+# Set proper permissions for node_modules binaries
+RUN chmod +x node_modules/.bin/*
+
+# Build the application using npx with yes flag
+RUN npx --yes webpack --mode production
 
 # Install serve globally
 RUN npm install -g serve
