@@ -137,7 +137,7 @@ const AudioRecorder = ({ onResponse }) => {
       const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
       const formData = new FormData();
       formData.append('audio', audioFile);
-      
+      console.log(process.env.REACT_APP_API_URL)
       const response = await fetch(`${process.env.REACT_APP_API_URL|| 'https://bulbulfriend-backend.up.railway.app'}/api/openai`, {
         method: 'POST',
         body: formData,
