@@ -41,6 +41,18 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+@app.get("/check_ffmpeg")
+async def check_ffmpeg():
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return {"status": "found", "version": result.stdout.splitlines()[0]}
+    except FileNotFoundError:
+        return {"status": "not found"}
 
 # Add CORS middleware
 app.add_middleware(
