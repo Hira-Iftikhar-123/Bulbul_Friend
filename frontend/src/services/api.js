@@ -1,8 +1,6 @@
 import axios from 'axios';
-
 // API base URL - use environment variable or fallback to production backend
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app';
-
+const API_BASE_URL = process.env.REACT_APP_API_URL ||'https://bulbulfriend-backend.up.railway.app';
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -12,8 +10,6 @@ const api = axios.create({
   withCredentials: false,
   timeout: 30000
 });
-
-// Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -146,7 +142,7 @@ export const speechAPI = {
   },
 };
 
-// Chat API with realtime conversation support
+// Chat API
 export const chatAPI = {
   sendMessage: (message, language = 'arabic') => {
     return api.post('/api/chat', {
@@ -154,27 +150,13 @@ export const chatAPI = {
       language,
     }).then(res => res.data);
   },
-
-  realtimeConversation: (formData) => {
-    // Create a new axios instance for multipart form data
-    const realtimeApi = axios.create({
-      baseURL: API_BASE_URL,
-      headers: { 
-        'Content-Type': 'multipart/form-data'
-      },
-      withCredentials: false,
-      timeout: 60000
-    });
-
-    return realtimeApi.post('/api/realtime-conversation', formData);
-  },
 };
 
 // Streaming TTS API
 export const streamingTTSAPI = {
   processAudio: async (transcript, onChunk) => {
     const formData = new FormData();
-    formData.append('transcript', transcript);
+    formData.append('transcript',transcript );
     
     try {
       const response = await fetch(`${API_BASE_URL}/api/streaming-tts-fixed`, {
@@ -196,7 +178,7 @@ export const streamingTTSAPI = {
         
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
         
         for (const line of lines) {
           if (line.trim()) {
@@ -204,19 +186,20 @@ export const streamingTTSAPI = {
               const chunk = JSON.parse(line);
               onChunk(chunk);
             } catch (e) {
-              // Silent fail for malformed JSON
+              console.warn('Failed to parse JSON chunk:', line);
             }
           }
         }
       }
     } catch (error) {
+      console.error('Streaming TTS error:', error);
       throw error;
     }
   },
 
   processTranscript: async (transcript, language = 'arabic', onChunk) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/streaming-tts-transcript`, {
+      const response =await fetch(`${API_BASE_URL}/api/streaming-tts-transcript`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -241,7 +224,7 @@ export const streamingTTSAPI = {
         
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
         
         for (const line of lines) {
           if (line.trim()) {
@@ -249,12 +232,13 @@ export const streamingTTSAPI = {
               const chunk = JSON.parse(line);
               onChunk(chunk);
             } catch (e) {
-              // Silent fail for malformed JSON
+              console.warn('Failed to parse JSON chunk:', line);
             }
           }
         }
       }
     } catch (error) {
+      console.error('Streaming TTS transcript error:', error);
       throw error;
     }
   },

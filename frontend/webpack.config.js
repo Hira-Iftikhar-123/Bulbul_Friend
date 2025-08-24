@@ -2,7 +2,6 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
   const publicUrl = process.env.PUBLIC_URL || '';
@@ -59,7 +58,7 @@ module.exports = (env, argv) => {
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(argv.mode || 'development'),
-        'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL || 'https://bulbulfriend-backend.up.railway.app'),
+        'process.env.REACT_APP_API_URL': JSON.stringify(process.env.REACT_APP_API_URL|| 'https://bulbulfriend-backend.up.railway.app' ),
         'process.env.PUBLIC_URL': JSON.stringify(publicUrl)
       })
     ],

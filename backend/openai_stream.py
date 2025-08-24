@@ -23,13 +23,13 @@ def convert_to_mp3_bytes(data: bytes) -> bytes:
     except FileNotFoundError:
         raise RuntimeError("ffmpeg not found. Please install ffmpeg and ensure it's in your PATH.")
 
-async def OpenAIAudio(file: BytesIO):
+async def OpenAIAudio(file: UploadFile):
     """
     Processes an audio file by converting it to MP3 and sending it to OpenAI's Whisper API
     for transcription.
     """
     client = OpenAI(api_key=apikey)
-    audio_data = file.read()
+    audio_data = await file.read()
 
     if len(audio_data) < 100:  
         raise RuntimeError("Audio file too small, likely corrupted or empty")
