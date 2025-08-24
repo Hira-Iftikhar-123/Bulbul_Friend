@@ -1,5 +1,2 @@
 [phases.setup]
-apt_pkgs = ["ffmpeg", "libpq-dev"]
-
-[phases.build]
-cmds = ["pip install -r requirements.txt"]
+apt_pkgs = ["ffmpeg", "libsm6", "libxext6"]
