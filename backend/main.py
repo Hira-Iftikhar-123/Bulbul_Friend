@@ -41,7 +41,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
-@app.get("/check_ffmpeg")
+@app.get("/check_dep")
 async def check_ffmpeg():
     try:
         result = subprocess.run(
